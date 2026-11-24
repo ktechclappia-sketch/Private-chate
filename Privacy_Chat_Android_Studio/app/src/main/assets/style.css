@@ -111,3 +111,14 @@ body{background:var(--pink-0);color:var(--ink-plum)}
 
 /* Small phone refinements */
 @media(max-width:360px){.sidebar-tabs{gap:3px;margin:0 6px 7px}.side-tab{font-size:9px;padding:4px 1px}.side-tab span{font-size:8px}.sidebar-mini-mark{display:none}}
+
+.online-dot{background:#20ad71!important}
+.avatar-wrap{position:relative;display:inline-flex;flex:0 0 auto}
+.presence-dot{position:absolute;right:-2px;bottom:-2px;width:10px;height:10px;border:2px solid #fff;border-radius:50%;background:#e34848;box-shadow:0 0 0 1px #ffffffaa}
+.presence-dot.is-online{background:#21b36b}
+.peer-online{color:#14834f!important}
+.message.new-incoming{animation:pc-message-flash 1s ease-in-out 4}
+.list-entry.has-unread{border-color:#e7468a;animation:pc-unread-flash 1.1s ease-in-out 3}
+@keyframes pc-message-flash{0%,100%{background:#fff}50%{background:#ff9fc7;box-shadow:0 0 0 4px #ff9fc755}}
+@keyframes pc-unread-flash{0%,100%{background:#fff}50%{background:#ffd0e3}}
+@media(prefers-reduced-motion:reduce){.message.new-incoming,.list-entry.has-unread{animation:none}}
