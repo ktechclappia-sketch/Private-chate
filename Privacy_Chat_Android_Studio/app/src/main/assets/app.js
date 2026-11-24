@@ -7,7 +7,9 @@ const $ = id => document.getElementById(id);
 const state = { sb: null, user: null, requests: [], profiles: {}, chatId: null,
   tab: 'chats', authMode: 'login', imageFile: null, busy: false, polling: null,
   channels: [], photoCache: new Map(), messageLoadVersion: 0, photoViewerLoadVersion: 0,
-  groups: [], groupMemberships: [], groupMembers: [], chatType: 'direct' };
+  groups: [], groupMemberships: [], groupMembers: [], chatType: 'direct',
+  presenceChannels: new Map(), presenceByRequest: {}, lastLoadedMessageIds: new Map(),
+  pendingBlink: new Set(), notifiedMessageIds: new Set() };
 
 const config = window.PRIVACY_CHAT_CONFIG || {};
 const isAndroidApp = location.hostname==='appassets.androidplatform.net';
@@ -19,6 +21,14 @@ const shortTime = d => new Date(d).toLocaleTimeString([], {hour:'2-digit',minute
 function toast(message, timeout=3800) {
   const t=$('toast'); t.textContent=message; t.classList.add('visible');
   clearTimeout(toast.timeout); toast.timeout=setTimeout(()=>t.classList.remove('visible'),timeout);
+}
+function notifyIncoming(title) {
+  const safeTitle=String(title||'Private contact').slice(0,100);
+  if(isAndroidApp && window.PrivacyChatNative?.showMessageNotification) {
+    window.PrivacyChatNative.showMessageNotification('New private message',`From ${safeTitle}`);
+  } else if('Notification' in window && Notification.permission==='granted') {
+    try { new Notification('New private message',{body:`From ${safeTitle}`}); } catch(_) {}
+  }
 }
 function errorText(e) { return e?.message || 'Something went wrong. Please try again.'; }
 function emailFor(userId) { return state.profiles[userId] || (userId===state.user?.id ? state.user.email : 'Private contact'); }
@@ -70,6 +80,7 @@ function setAuthMode(mode) {
 async function authSubmit(e) {
   e.preventDefault();
   if(!configured || !state.sb) {toast('Supabase config is not ready. See START_HERE.');return;}
+  if(isAndroidApp && window.PrivacyChatNative?.requestNotificationPermission)window.PrivacyChatNative.requestNotificationPermission();
   const email=$('auth-email').value.trim().toLowerCase(), password=$('auth-password').value;
   if(password.length<8){toast('Use at least 8 characters.');return;}
   $('auth-submit').disabled=true;
@@ -107,14 +118,16 @@ async function enterApp(user) {
   $('user-avatar').textContent=initial(user.email);
   $('auth').classList.add('hidden');$('dashboard').classList.remove('hidden');
   setTab('chats');
+  subscribeRealtime();
   await refreshRequests();
   await refreshGroups();
-  subscribeRealtime();
+  syncPresenceChannels();
   clearInterval(state.polling);
   state.polling=setInterval(async()=>{
     if(!state.user)return;
     await refreshRequests();
     await refreshGroups();
+    syncPresenceChannels();
     if(state.chatId)await loadMessages(false);
   },12000);
 }
@@ -135,6 +148,7 @@ async function refreshRequests() {
   if(state.user?.id!==userId)return;
   state.profiles=next;
   renderLists();
+  syncPresenceChannels();
   if(state.chatType==='direct'){
     const selected=state.requests.find(r=>r.id===state.chatId&&r.status==='accepted');
     if(state.chatId&&!selected){state.chatId=null;showEmptyChat();}
@@ -149,9 +163,14 @@ function renderLists() {
   for(const r of approved){
     const email=emailFor(peerId(r));
     const b=el('button','list-entry'+(state.chatId===r.id?' selected':''));
+    const avatarWrap=el('span','avatar-wrap');
     const avatar=el('span','avatar',initial(email));
+    const presence=el('span','presence-dot'+(state.presenceByRequest[r.id]?' is-online':''));
+    presence.title=state.presenceByRequest[r.id]?'Online':'Offline';
+    avatarWrap.append(avatar,presence);
     const text=el('span','list-text');text.append(el('span','list-name',email),el('small','', 'Private conversation'));
-    b.append(avatar,text);b.addEventListener('click',()=>openChat(r.id));$('chat-list').append(b);
+    if(state.pendingBlink.has(r.id))b.classList.add('has-unread');
+    b.append(avatarWrap,text);b.addEventListener('click',()=>openChat(r.id));$('chat-list').append(b);
   }
   const received=state.requests.filter(r=>r.status==='pending'&&r.recipient_id===state.user.id);
   const sent=state.requests.filter(r=>r.sender_id===state.user.id&&r.status!=='accepted');
@@ -201,7 +220,8 @@ function renderPeer(r) {
   const email=emailFor(peerId(r));
   $('peer-avatar').textContent=initial(email);
   $('peer-title').textContent=email;
-  $('peer-subtitle').textContent='Private 1-to-1 conversation';
+  $('peer-subtitle').textContent=(state.presenceByRequest[r.id]?'Online':'Offline')+' · Private 1-to-1 conversation';
+  $('peer-subtitle').classList.toggle('peer-online',!!state.presenceByRequest[r.id]);
 }
 function showEmptyChat() {
   $('chat-empty').classList.remove('hidden');$('chat-active').classList.add('hidden');
@@ -236,13 +256,15 @@ async function loadMessages(scroll=true) {
   const area=$('messages'),nearBottom=area.scrollHeight-area.scrollTop-area.clientHeight<100;
   const fragment=document.createDocumentFragment();
   const chronological=[...(data||[])].reverse();
+  const previousIds=state.lastLoadedMessageIds.get(chatType+':'+chatId);
   if(!chronological.length)fragment.append(el('p','no-messages','This conversation starts here. Say hello!'));
   let previousDate='';
   for(const m of chronological){
     if(state.chatId!==chatId||state.chatType!==chatType||loadVersion!==state.messageLoadVersion)return;
     const day=new Date(m.created_at).toLocaleDateString();
     if(day!==previousDate){fragment.append(el('div','message-day',day));previousDate=day;}
-    const bubble=el('div','message'+(m.sender_id===state.user.id?' mine':''));
+    const isNew=m.sender_id!==state.user.id&&((!!previousIds&&!previousIds.has(m.id))||state.pendingBlink.has(chatId));
+    const bubble=el('div','message'+(m.sender_id===state.user.id?' mine':'')+(isNew?' new-incoming':''));
     if(isGroup)bubble.append(el('div','message-sender',emailFor(m.sender_id)));
     if(m.photo_path){
       const img=el('img','photo');img.alt='Tap to enlarge shared private photograph';img.loading='lazy';
@@ -262,6 +284,9 @@ async function loadMessages(scroll=true) {
   }
   if(state.chatId!==chatId||state.chatType!==chatType||loadVersion!==state.messageLoadVersion)return;
   area.replaceChildren(fragment);
+  state.pendingBlink.delete(chatId);
+  state.lastLoadedMessageIds.set(chatType+':'+chatId,new Set(chronological.map(m=>m.id)));
+  if(isGroup)renderGroupLists();else renderLists();
   if(scroll||nearBottom)area.scrollTop=area.scrollHeight;
 }
 async function openPhotoViewer(photoPath,bucket='pc-photos'){
@@ -359,6 +384,7 @@ async function logout() {
   // Only explicit sign-out removes the Android local app lock. Normal app exit never does.
   if(isAndroidApp)location.href='privacychat://signed-out';
   state.user=null;state.chatId=null;state.chatType='direct';++state.messageLoadVersion;state.requests=[];state.groups=[];state.groupMemberships=[];state.groupMembers=[];state.profiles={};state.photoCache.clear();closePhotoViewer();closeGroupMembers();
+  state.presenceChannels.clear();state.presenceByRequest={};state.lastLoadedMessageIds.clear();state.pendingBlink.clear();state.notifiedMessageIds.clear();
   showEmptyChat();$('dashboard').classList.remove('mobile-chat');
   $('dashboard').classList.add('hidden');$('auth').classList.remove('hidden');setAuthMode('login');
   $('auth-password').value='';$('live-label').textContent='Disconnected';$('live-dot').classList.remove('live');
@@ -372,16 +398,52 @@ function subscribeRealtime() {
     .subscribe(s=>{if(s==='SUBSCRIBED'){$('live-label').textContent='Live connection';$('live-dot').classList.add('live');}});
   const msgs=state.sb.channel('pc-messages-'+userId)
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'pc_messages'},p=>{
-      if(state.chatType==='direct'&&p.new?.request_id===state.chatId)loadMessages();
+      const m=p.new;if(!m)return;
+      if(m.sender_id!==state.user?.id&&!state.notifiedMessageIds.has(m.id)){
+        state.notifiedMessageIds.add(m.id);
+        const request=state.requests.find(r=>r.id===m.request_id&&r.status==='accepted');
+        if(request){notifyIncoming(emailFor(peerId(request)));if(state.chatId!==m.request_id)state.pendingBlink.add(m.request_id);renderLists();}
+      }
+      if(state.chatType==='direct'&&m.request_id===state.chatId)loadMessages();
     }).subscribe();
   const groupMessages=state.sb.channel('pc-group-messages-'+userId)
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'pc_group_messages'},p=>{
-      if(state.chatType==='group'&&p.new?.group_id===state.chatId)loadMessages();
+      const m=p.new;if(!m)return;
+      if(m.sender_id!==state.user?.id&&!state.notifiedMessageIds.has(m.id)){
+        state.notifiedMessageIds.add(m.id);
+        const group=state.groups.find(g=>g.id===m.group_id);
+        if(group){notifyIncoming(group.name);if(state.chatId!==m.group_id)state.pendingBlink.add(m.group_id);renderGroupLists();}
+      }
+      if(state.chatType==='group'&&m.group_id===state.chatId)loadMessages();
     }).subscribe();
   const memberChanges=state.sb.channel('pc-group-members-'+userId)
     .on('postgres_changes',{event:'*',schema:'public',table:'pc_group_members'},()=>refreshGroups())
     .subscribe();
   state.channels=[req,msgs,groupMessages,memberChanges];
+}
+
+function syncPresenceChannels(){
+  if(!state.user||!state.sb)return;
+  const accepted=state.requests.filter(r=>r.status==='accepted');
+  const wanted=new Set(accepted.map(r=>r.id));
+  for(const [id,channel] of state.presenceChannels){
+    if(!wanted.has(id)){state.sb.removeChannel(channel);state.presenceChannels.delete(id);delete state.presenceByRequest[id];}
+  }
+  for(const request of accepted){
+    if(state.presenceChannels.has(request.id))continue;
+    const channel=state.sb.channel('pc-presence-'+request.id,{config:{presence:{key:state.user.id}}});
+    const update=()=>{
+      const peer=peerId(request),presence=channel.presenceState();
+      state.presenceByRequest[request.id]=Object.entries(presence).some(([key,entries])=>key===peer||(entries||[]).some(entry=>entry.user_id===peer));
+      renderLists();if(state.chatType==='direct'&&state.chatId===request.id)renderPeer(request);
+    };
+    channel.on('presence',{event:'sync'},update).on('presence',{event:'join'},update).on('presence',{event:'leave'},update)
+      .subscribe(status=>{
+        if(status==='SUBSCRIBED')channel.track({user_id:state.user.id,status:'online'});
+        else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'){state.presenceByRequest[request.id]=false;update();}
+      });
+    state.presenceChannels.set(request.id,channel);state.channels.push(channel);
+  }
 }
 
 
@@ -421,6 +483,7 @@ function renderGroupLists(){
   for(const m of approved){
     const g=state.groups.find(x=>x.id===m.group_id);if(!g)continue;
     const b=el('button','list-entry group-list-entry'+(state.chatType==='group'&&state.chatId===g.id?' selected':''));
+    if(state.pendingBlink.has(g.id))b.classList.add('has-unread');
     const avatar=el('span','avatar','♧');const t=el('span','list-text');
     t.append(el('span','list-name',g.name),el('small','',g.owner_id===state.user.id?'Group admin':'Group member'));
     b.append(avatar,t);b.addEventListener('click',()=>openGroupChat(g.id));$('group-list').append(b);
