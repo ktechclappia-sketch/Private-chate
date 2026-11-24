@@ -3,9 +3,16 @@ package com.ktech.privacychat;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.KeyguardManager;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.Manifest;
+import android.content.Context;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.hardware.biometrics.BiometricPrompt;
 import android.net.Uri;
@@ -21,6 +28,7 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -50,12 +58,15 @@ public final class MainActivity extends Activity {
     private static final String APP_HOST="appassets.androidplatform.net";
     private static final String ROOT_URL="https://"+APP_HOST+"/index.html";
     private static final int FILE_REQUEST_CODE=4381;
+    private static final int NOTIFICATION_PERMISSION_CODE=4382;
+    private static final String NOTIFICATION_CHANNEL="privacy_chat_messages";
     private static final int BG=Color.rgb(248,196,218);
     private WebView webView;
     private ValueCallback<Uri[]> pendingFileCallback;
     private boolean choosingPhoto=false;
     private boolean blankMode=false;
     private boolean initialLockSetupOpen=false;
+    private boolean notificationPermissionRequested=false;
     private int failedUnlocks=0;
     private long cooldownUntil=0;
     private SharedPreferences locks;
@@ -230,6 +241,7 @@ public final class MainActivity extends Activity {
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
         settings.setSupportMultipleWindows(false);
+        webView.addJavascriptInterface(new NotificationBridge(),"PrivacyChatNative");
         webView.setWebViewClient(new WebViewClient(){
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request){
                 Uri uri=request.getUrl();
@@ -285,6 +297,27 @@ public final class MainActivity extends Activity {
         });
         setContentView(webView);
         webView.loadUrl(ROOT_URL);
+    }
+    private final class NotificationBridge{
+        @JavascriptInterface public void requestNotificationPermission(){runOnUiThread(()->{
+            if(Build.VERSION.SDK_INT>=33&&!notificationPermissionRequested&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED){
+                notificationPermissionRequested=true;
+                requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFICATION_PERMISSION_CODE);
+            }
+        });}
+        @JavascriptInterface public void showMessageNotification(String title,String text){runOnUiThread(()->postMessageNotification(title,text));}
+    }
+    private void postMessageNotification(String title,String text){
+        if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)return;
+        NotificationManager manager=(NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
+        if(manager==null||!manager.areNotificationsEnabled())return;
+        if(Build.VERSION.SDK_INT>=26)manager.createNotificationChannel(new NotificationChannel(NOTIFICATION_CHANNEL,"Private Chat messages",NotificationManager.IMPORTANCE_DEFAULT));
+        Intent open=new Intent(this,MainActivity.class);
+        PendingIntent pending=PendingIntent.getActivity(this,0,open,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        Notification.Builder builder=Build.VERSION.SDK_INT>=26?new Notification.Builder(this,NOTIFICATION_CHANNEL):new Notification.Builder(this);
+        Notification notification=builder.setSmallIcon(android.R.drawable.ic_dialog_email).setContentTitle(title).setContentText(text)
+            .setStyle(new Notification.BigTextStyle().bigText(text)).setContentIntent(pending).setAutoCancel(true).build();
+        manager.notify((int)(System.currentTimeMillis()&0x7fffffff),notification);
     }
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){
         super.onActivityResult(requestCode,resultCode,data);
