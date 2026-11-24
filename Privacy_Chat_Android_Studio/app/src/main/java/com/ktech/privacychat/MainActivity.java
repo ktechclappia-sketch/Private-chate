@@ -150,7 +150,7 @@ public final class MainActivity extends Activity {
                 }
                 @Override public void onAuthenticationError(int errorCode,CharSequence errString){
                     super.onAuthenticationError(errorCode,errString);
-                    if(errorCode!=BiometricPrompt.BIOMETRIC_ERROR_USER_CANCELED && errorCode!=BiometricPrompt.BIOMETRIC_ERROR_NEGATIVE_BUTTON)
+                    if(errorCode!=BiometricPrompt.BIOMETRIC_ERROR_USER_CANCELED)
                         note("Fingerprint unavailable. Use your main password.");
                 }
             });
