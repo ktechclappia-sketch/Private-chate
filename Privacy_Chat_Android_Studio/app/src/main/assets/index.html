@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="mr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f8c4da">
+  <meta name="description" content="Private one-to-one and group chat with invitations and private photo sharing.">
+  <title>Privacy Chat • Private conversations</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <div id="setup-warning" class="setup-warning hidden">
+    <strong>Cloud setup required</strong><span>Check <code>config.js</code> and the installed Privacy Chat schema in your Supabase project.</span>
+  </div>
+  <main id="auth" class="auth-shell">
+    <div class="auth-decor"><span class="glow-one"></span><span class="glow-two"></span></div>
+    <div class="auth-wrap">
+      <div class="hero-copy">
+        <div class="brand"><span class="brand-icon">◈</span> PRIVACY <span class="brand-light">CHAT</span></div>
+        <div class="eyebrow">PRIVATE SPACE · INVITATION ONLY</div>
+        <h1>Your conversations.<br><em>Only yours.</em></h1>
+        <p>A quiet, private place to connect with someone you trust. Invite by email, share moments, and stay in control.</p>
+        <div class="feature-row"><span>◉ Invitation only</span><span>▣ Private photos</span><span>◈ Hidden screen</span></div>
+      </div>
+      <div class="auth-card">
+        <div class="auth-intro"><span class="lock-illustration">♧</span><h2 id="auth-title">Welcome back</h2><p id="auth-subtitle">Sign in to your private space</p></div>
+        <form id="auth-form" autocomplete="off">
+          <label for="auth-email">Email address</label>
+          <input id="auth-email" type="email" required placeholder="you@example.com" autocomplete="username">
+          <label for="auth-password">Password</label>
+          <div class="password-wrap"><input id="auth-password" type="password" required minlength="8" placeholder="Enter your password" autocomplete="current-password"><button type="button" id="auth-toggle-password" class="subtle">Show</button></div>
+          <button type="submit" id="auth-submit" class="primary-btn full">Sign in <span>→</span></button>
+        </form>
+        <div class="auth-divider">YOUR SPACE, YOUR CONTROL</div>
+        <button type="button" id="auth-switch" class="auth-link">New here? Create an account</button><button type="button" id="resend-verification" class="auth-link resend-link">Resend verification email</button>
+        <p class="auth-note">On Android, set two local passwords under Privacy & security. Fingerprint or main password unlocks chats; the other password opens a blank screen.</p>
+      </div>
+    </div>
+    <footer class="auth-footer">Privacy Chat · A private, invite-only messaging workspace</footer>
+  </main>
+
+  <main id="dashboard" class="dashboard hidden">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand"><span class="brand-icon">◈</span><span>PRIVACY <b>CHAT</b></span><span class="sidebar-mini-mark" aria-hidden="true">• Private</span></div>
+      <div class="profile-row"><div class="avatar" id="user-avatar">P</div><div class="user-info"><strong>My private space</strong><small id="my-email"></small></div><span class="online-dot" title="Signed in"></span></div>
+      <div class="sidebar-tabs"><button class="side-tab active" data-tab="chats">☷ <span>Messages</span></button><button class="side-tab" data-tab="groups">♧ <span>Groups</span><i id="group-pending-count" class="count-bubble hidden">0</i></button><button class="side-tab" data-tab="requests">◇ <span>Requests</span><i id="pending-count" class="count-bubble hidden">0</i></button><button class="side-tab" data-tab="security">⚙ <span>Security</span></button></div>
+      <div id="sidebar-content" class="sidebar-scroll">
+        <section id="chats-panel"><div class="panel-heading"><h3>Chats</h3><span class="muted-small">Private</span></div><div id="chat-list" class="chat-list"><div class="empty-list">No conversations yet.</div></div></section>
+        <section id="groups-panel" class="hidden">
+          <div class="panel-heading"><h3>Groups</h3><span class="muted-small">Private</span></div>
+          <form id="create-group-form"><label for="new-group-name" class="hint-label">NEW GROUP NAME</label><div class="invite-box"><input id="new-group-name" minlength="2" maxlength="80" required placeholder="Family, Friends, Team..."><button type="submit" aria-label="Create group">＋</button></div></form>
+          <h4>My groups</h4><div id="group-list" class="chat-list"></div>
+          <h4>Group invitations</h4><div id="group-invites" class="invite-list"></div>
+          <p class="tiny-copy">Invite an accepted contact into your group. They must accept before they can read new messages.</p>
+        </section><section id="requests-panel" class="hidden"><div class="panel-heading"><h3>Requests</h3></div><form id="invite-form"><label for="invite-email" class="hint-label">INVITE SOMEONE BY EMAIL</label><div class="invite-box"><input type="email" id="invite-email" required placeholder="friend@example.com"><button type="submit" aria-label="Send invitation" title="Send request">→</button></div></form><h4>Received</h4><div id="received-list" class="invite-list"></div><h4>Sent</h4><div id="sent-list" class="invite-list"></div></section>
+        <section id="security-panel" class="hidden"><div class="panel-heading"><h3>Discreet access</h3></div>
+          <div id="android-lock-settings" class="android-lock-settings hidden"><h4>Fingerprint + Two Local Passwords</h4><p class="security-copy">Set your main secret password to unlock chats; set a different decoy password to open a blank screen. After the first email login the Android app can remember your session. These are app-lock passwords, not account passwords.</p><button class="primary-btn full" id="setup-native-lock" type="button">Set / Change both passwords</button><p class="tiny-copy">For safety, Android stores only salted password verifiers. Enable your phone fingerprint in Android Settings. This is an app lock, not end-to-end encryption.</p></div>
+          <div id="browser-decoy-settings"><p class="security-copy">Set an alternate password for this browser. On the login screen, it opens a completely blank page without signing in or downloading chats.</p><form id="decoy-form"><label for="verify-password">Current main password</label><input id="verify-password" type="password" required minlength="8" autocomplete="current-password" placeholder="Verify your normal login password"><label for="decoy-password">Alternate password</label><input id="decoy-password" type="password" required minlength="8" autocomplete="new-password" placeholder="At least 8 characters"><label for="decoy-repeat">Confirm alternate password</label><input id="decoy-repeat" type="password" required minlength="8" autocomplete="new-password" placeholder="Repeat password"><button type="submit" class="primary-btn full">Save alternate password</button></form><button id="remove-decoy" class="secondary-btn full" type="button">Remove this device's alternate password</button><p class="tiny-copy">This password is stored as a salted verifier on <b>this device only</b>. You must set it separately on other devices. It hides the interface; it does not provide end-to-end encryption.</p></div></section>
+      </div>
+      <div class="sidebar-bottom"><button id="logout" class="signout-btn">⇥ Sign out</button><div class="connection"><span id="live-dot"></span><span id="live-label">Connecting…</span></div></div>
+    </aside>
+    <section class="conversation" id="conversation">
+      <div class="conv-header"><button id="mobile-back" class="mobile-back" aria-label="Back to chat list">←</button><div class="peer-avatar" id="peer-avatar">◈</div><div class="conv-heading"><strong id="peer-title">Your private space</strong><small id="peer-subtitle">Select a conversation to begin</small></div><button type="button" id="group-members-button" class="quick-hide hidden" title="Group members and settings">Members</button><button type="button" id="quick-hide" class="quick-hide" title="Instantly lock or hide this chat" aria-label="Hide chat immediately">Hide</button><div class="header-shield" title="Access controlled by the server">♢</div></div>
+      <div id="chat-empty" class="chat-empty"><div class="empty-art">◈</div><h2>Your private chats.</h2><p>Choose a chat or private group. Messages and photos are visible only to approved participants.</p><button id="empty-invite" class="primary-btn">Send an invitation <span>→</span></button></div>
+      <div id="chat-active" class="chat-active hidden"><div id="messages" class="messages" role="log" aria-live="polite"></div><form id="composer" class="composer"><label for="photo-input" class="attach-btn" title="Share photo" aria-label="Attach photo">＋</label><input type="file" accept="image/jpeg,image/png,image/webp" id="photo-input" class="visually-hidden"><div class="compose-entry"><textarea id="message-input" placeholder="Write a private message..." rows="1" maxlength="4000"></textarea><div id="file-preview" class="file-preview hidden"></div></div><button type="submit" id="send-btn" class="send-btn" aria-label="Send">➤</button></form></div>
+      <div class="conv-footer" id="conv-footer">Invitation-only conversations · Private photo storage</div>
+    </section>
+  </main>
+  <div class="group-members-overlay hidden" id="group-members-overlay" role="dialog" aria-modal="true" aria-label="Manage group members">
+    <div class="group-members-card"><div class="group-members-header"><strong id="manage-group-title">Group members</strong><button type="button" id="close-group-members" class="viewer-close-small" aria-label="Close">×</button></div>
+      <div id="group-members-list" class="group-members-list"></div>
+      <div id="group-invite-controls" class="hidden"><h4>Add accepted contact</h4><form id="group-invite-form"><select id="group-invite-contact" required></select><button type="submit" class="primary-btn">Invite</button></form></div>
+      <button type="button" class="secondary-btn full hidden" id="leave-group">Leave this group</button>
+    </div>
+  </div>
+  <div class="photo-viewer hidden" id="photo-viewer" role="dialog" aria-modal="true" aria-label="Private photo preview">
+    <button type="button" id="photo-viewer-close" class="viewer-close" aria-label="Close photo">×</button>
+    <img id="photo-viewer-image" alt="Shared private photo" />
+  </div>
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.2"></script>
+  <script src="app.js"></script>
+</body>
+</html>
