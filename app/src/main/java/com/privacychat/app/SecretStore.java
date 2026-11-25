@@ -18,11 +18,16 @@ final class SecretStore {
  if(!prefs.edit().putString(prefix+"owner",a).putString(prefix+"restricted",b).commit())throw new IllegalStateException("Save failed");
  }finally{Arrays.fill(owner,'\0');Arrays.fill(restricted,'\0');}
  }
+ long retryDelay(){return Math.max(0,Math.min(30000,prefs.getLong(prefix+"retryAt",0)-System.currentTimeMillis()));}
  synchronized int unlock(char[] password)throws Exception{
  try{
- if(!configured())return 0;
+ if(!configured()||retryDelay()>0)return 0;
  boolean a=SecretVerifier.verify(password,prefs.getString(prefix+"owner",null));
  boolean b=SecretVerifier.verify(password,prefs.getString(prefix+"restricted",null));
+ int failures=a||b?0:prefs.getInt(prefix+"failures",0)+1;
+ long retryAt=failures>=5?System.currentTimeMillis()+30000:0;
+ if(!prefs.edit().putInt(prefix+"failures",failures).putLong(prefix+"retryAt",retryAt).commit())
+     throw new IllegalStateException("Unable to update lock state");
  return a?1:b?2:0;
  }finally{Arrays.fill(password,'\0');}
  }

@@ -1,10 +1,8 @@
 package com.privacychat.app;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.SystemClock;
 import android.content.Intent;
 import android.net.Uri;
 import android.graphics.Bitmap;
@@ -30,8 +28,9 @@ public class MainActivity extends Activity {
     private boolean busy, foreground, owner;
     private Uri pendingPhoto;
     private String photoRoom;
-    private int failures;
-    private long retryAt;
+    private String accessState;
+    private int unlockGeneration;
+    private final Runnable accessCheck = this::checkAccess;
     private final Runnable lockTimer = this::lock;
     interface Work { Object run() throws Exception; }
     interface Done { void accept(Object value) throws Exception; }
@@ -93,10 +92,15 @@ public class MainActivity extends Activity {
         return session.getString("access_token");
     }
     private void logout(){
-        synchronized(this){vault.clear();session=null;}pendingPhoto=null;photoRoom=null;timer.removeCallbacks(lockTimer);login();
+        String accessToken;
+        synchronized(this){accessToken=session==null?"":session.optString("access_token");vault.clear();session=null;}
+        if(!accessToken.isEmpty())queue.execute(()->{try{
+            CloudPurchase.request("/auth/v1/logout?scope=local",accessToken,new JSONObject());
+        }catch(Exception ignored){ /* The device session was already cleared. */ }});
+        cancelAccessChecks();pendingPhoto=null;photoRoom=null;timer.removeCallbacks(lockTimer);login();
     }
     private void lock(){
-        owner=false;timer.removeCallbacks(lockTimer);if(session==null){login();return;}
+        owner=false;cancelAccessChecks();timer.removeCallbacks(lockTimer);if(session==null){login();return;}
         SecretStore secrets=new SecretStore(this,uid());
         if(!secrets.configured()){
             page("Set your two secret passwords");EditText a=field("Full chat password · 8+ characters",129),b=field("Empty view password · 8+ characters",129);
@@ -105,25 +109,58 @@ public class MainActivity extends Activity {
         }else{
             page("Privacy Chat");EditText p=field("Secret password",129);
             button("Unlock",()->{
-                if(SystemClock.elapsedRealtime()<retryAt){status.setText("Try again in 30 seconds.");return;}
+                if(secrets.retryDelay()>0){status.setText("Try again in 30 seconds.");return;}
                 char[] x=p.getText().toString().toCharArray();p.setText("");
-                task(()->secrets.unlock(x),v->{int mode=(Integer)v;if(mode==0){if(++failures>=5)retryAt=SystemClock.elapsedRealtime()+30000;status.setText("Incorrect password");return;}
-                    failures=0;if(mode==1){owner=true;armTimer();home();}else{pendingPhoto=null;photoRoom=null;page("Privacy Chat");label("No conversations");button("Lock",this::lock);}});
+                task(()->secrets.unlock(x),v->{int mode=(Integer)v;if(mode==0){status.setText("Incorrect password");return;}
+                    if(mode==1){owner=true;armTimer();home();}else{pendingPhoto=null;photoRoom=null;page("Privacy Chat");label("No conversations");button("Lock",this::lock);}});
             });
         }
         button("Sign out",this::logout);
     }
-    private Object rpc(String op,JSONObject input)throws Exception{
+    protected Object rpc(String op,JSONObject input)throws Exception{
         String result=CloudPurchase.request("/rest/v1/rpc/privacy_chat_action",token(),args("op",op,"args",input));
         return new JSONTokener(result).nextValue();
     }
     private void call(String op,Done done,Object... pairs){task(()->rpc(op,args(pairs)),done);}
+    private void cancelAccessChecks(){
+        unlockGeneration++;accessState=null;timer.removeCallbacks(accessCheck);
+    }
+    private static String accessState(JSONObject a){
+        return a.optBoolean("enabled",true)+":"+a.optBoolean("active")+":"+a.optBoolean("admin")+":"+a.optBoolean("free_testing")+":"+a.optString("end")+":"+a.optString("payment");
+    }
+    private void scheduleAccessCheck(){
+        timer.removeCallbacks(accessCheck);
+        if(owner&&foreground)timer.postDelayed(accessCheck,15000);
+    }
+    private void checkAccess(){
+        if(!owner||!foreground)return;
+        final int generation=unlockGeneration;
+        queue.execute(()->{
+            try{
+                JSONObject a=(JSONObject)rpc("access",new JSONObject());
+                runOnUiThread(()->{
+                    if(generation!=unlockGeneration||!owner||!foreground||isDestroyed())return;
+                    if(!accessState(a).equals(accessState))home();else scheduleAccessCheck();
+                });
+            }catch(Exception e){runOnUiThread(()->{
+                if(generation==unlockGeneration && owner && foreground && !isDestroyed()){
+                    lock();status.setText("Connection interrupted. Unlock to check access again.");
+                }
+            });}
+        });
+    }
     private void home(){
         page("Privacy Chat");button("Lock",this::lock);button("Refresh",this::home);
-        call("access",v->{JSONObject a=(JSONObject)v;if(!a.getBoolean("active")){subscription(a);return;}
+        call("access",v->{JSONObject a=(JSONObject)v;accessState=accessState(a);scheduleAccessCheck();
+            if(!a.optBoolean("enabled",true)){
+                pendingPhoto=null;photoRoom=null;page("Account deactivated");
+                label("Contact the Privacy Chat admin to restore access.");button("Refresh access",this::home);button("Lock",this::lock);return;
+            }
+            if(!a.getBoolean("active")){subscription(a);return;}
             if(pendingPhoto!=null&&photoRoom!=null){confirmPhoto();return;}
             if(a.optBoolean("admin")){label("Admin · Free testing");button("Review UPI payments",this::reviews);}
-            else label("Active until "+a.optString("end"));
+            else if(a.optBoolean("free_testing"))label("Free testing access");
+            else label("Active until "+displayValue(a,"end"));
             button("Personal chat · invite by email",()->entry(false));button("Create group",()->entry(true));
             call("rooms",rooms->{JSONArray list=(JSONArray)rooms;if(list.length()==0)label("No conversations");
                 for(int i=0;i<list.length();i++){JSONObject row=list.getJSONObject(i);String id=row.getString("room"),title=row.getString("title");
@@ -167,11 +204,12 @@ public class MainActivity extends Activity {
         button("Send photo to selected conversation",()->task(()->rpc("send",args("room",room,"photo",photo(uri))),v->{pendingPhoto=null;photoRoom=null;home();}));
         button("Discard",()->{pendingPhoto=null;photoRoom=null;home();});
     }
+    private static String displayValue(JSONObject o,String key){return o.isNull(key)?"—":o.optString(key);}
     private void subscription(JSONObject a){
-        page("Privacy Chat · ₹100 per month");label("Start: "+a.optString("start","—")+"   End: "+a.optString("end","—"));label("Last payment: "+a.optString("payment","—"));label(CloudConfig.UPI_ID);
+        page("Privacy Chat · ₹100 per month");label("Start: "+displayValue(a,"start")+"   End: "+displayValue(a,"end"));label("Last payment: "+displayValue(a,"payment"));label(CloudConfig.UPI_ID);
         button("Pay ₹100 with UPI",()->{Uri pay=Uri.parse("upi://pay").buildUpon().appendQueryParameter("pa",CloudConfig.UPI_ID).appendQueryParameter("pn","Privacy Chat").appendQueryParameter("am","100.00").appendQueryParameter("cu","INR").build();try{startActivity(new Intent(Intent.ACTION_VIEW,pay));}catch(Exception ex){status.setText("Use the displayed UPI ID in your payment app.");}});
         EditText ref=field("UPI transaction reference",1);
-        button("Submit for verification",()->{String reference=ref.getText().toString().trim();task(()->{CloudPurchase.submit(token(),uid(),reference);return null;},v->home());});
+        button("Submit for verification",()->{String reference=ref.getText().toString().trim();if(reference.length()<8||reference.length()>80){status.setText("Enter the UPI transaction reference (8–80 characters).");return;}task(()->{CloudPurchase.submit(token(),uid(),reference);return null;},v->home());});
         button("Refresh access",this::home);button("Lock",this::lock);
     }
     private void reviews(){

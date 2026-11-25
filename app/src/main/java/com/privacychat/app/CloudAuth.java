@@ -28,6 +28,6 @@ final class CloudAuth {
   return request("/auth/v1/token?grant_type=password",new JSONObject().put("email",email).put("password",password));
  }
  static JSONObject signup(String email,String password)throws Exception {
-  return request("/auth/v1/signup",new JSONObject().put("email",email).put("password",password));
+  return request("/auth/v1/signup",new JSONObject().put("email",email).put("password",password).put("data",new JSONObject().put("registration_app","privacy_chat")));
  }
 }

@@ -2,6 +2,11 @@ name: Privacy Chat V2 Test
 on:
   push:
     branches: [main]
+    paths:
+      - "app/**"
+      - "*.gradle"
+      - "gradle.properties"
+      - ".github/workflows/privacy-v2-test.yml"
   workflow_dispatch:
 jobs:
   android:
