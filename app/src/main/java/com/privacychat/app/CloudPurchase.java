@@ -12,7 +12,7 @@ final class CloudPurchase {
  c.setInstanceFollowRedirects(false);c.setConnectTimeout(15000);c.setReadTimeout(15000);
  c.setRequestProperty("apikey",CloudConfig.PUBLIC_KEY);
  c.setRequestProperty("Authorization","Bearer "+token);
- if(body!=null){c.setRequestMethod("POST");c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");c.setRequestProperty("Prefer","return=minimal");try(java.io.OutputStream o=c.getOutputStream()){o.write(body.toString().getBytes(StandardCharsets.UTF_8));}}
+ if(body!=null){c.setRequestMethod("POST");c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");try(java.io.OutputStream o=c.getOutputStream()){o.write(body.toString().getBytes(StandardCharsets.UTF_8));}}
  int code=c.getResponseCode();if(code<200||code>=300)throw new java.io.IOException("Cloud request failed: "+code);
  try(java.io.InputStream in=c.getInputStream();java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream()){byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1)out.write(b,0,n);return out.toString("UTF-8");}
  }finally{c.disconnect();}

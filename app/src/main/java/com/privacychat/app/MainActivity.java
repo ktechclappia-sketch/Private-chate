@@ -1,48 +1,181 @@
 package com.privacychat.app;
+
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.SystemClock;
+import android.content.Intent;
+import android.net.Uri;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.util.Base64;
+import android.view.WindowManager;
 import android.widget.*;
-import org.json.JSONObject;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
+import org.json.*;
+
 public class MainActivity extends Activity {
- LinearLayout root;
- @Override public void onCreate(Bundle b){super.onCreate(b);loginScreen();}
- void base(String title){root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(40,48,40,24);root.setBackgroundColor(Color.rgb(255,240,247));android.widget.ScrollView scroll=new android.widget.ScrollView(this);scroll.setFillViewport(true);scroll.setBackgroundColor(Color.rgb(255,240,247));scroll.addView(root);setContentView(scroll);scroll.setOnApplyWindowInsetsListener((v,insets)->{int top,bottom,left,right;if(android.os.Build.VERSION.SDK_INT>=30){android.graphics.Insets bars=insets.getInsets(android.view.WindowInsets.Type.systemBars()|android.view.WindowInsets.Type.displayCutout());top=bars.top;bottom=bars.bottom;left=bars.left;right=bars.right;}else{top=insets.getSystemWindowInsetTop();bottom=insets.getSystemWindowInsetBottom();left=insets.getSystemWindowInsetLeft();right=insets.getSystemWindowInsetRight();}v.setPadding(left,top,right,bottom);return insets;});scroll.requestApplyInsets();TextView heading=label(title);heading.setTextSize(22);heading.setTextColor(Color.rgb(125,24,75));}
- TextView label(String s){TextView t=new TextView(this);t.setText(s);t.setTextSize(18);root.addView(t);return t;}
- EditText field(String hint,int type){EditText e=new EditText(this);e.setHint(hint);e.setInputType(type);root.addView(e);return e;}
- Button button(String s,Runnable action){Button b=new Button(this);b.setText(s);b.setOnClickListener(v->action.run());root.addView(b);return b;}
- void loginScreen(){base("Privacy Chat");EditText email=field("Email",33),password=field("Password",129);TextView status=label("");Button login=button("Login",()->authenticate(email,password,status,false));button("Register",()->authenticate(email,password,status,true));}
- String token="",userId="";
- void purchaseScreen(){
- base("Privacy Chat Premium");
- label("₹100 / Month");
- TextView dates=label("Checking subscription...");
- label("UPI: "+CloudConfig.UPI_ID);
- button("Purchase Now / Purchase Again",()->{try{
- android.net.Uri uri=android.net.Uri.parse("upi://pay").buildUpon().appendQueryParameter("pa",CloudConfig.UPI_ID).appendQueryParameter("pn","Privacy Chat").appendQueryParameter("am","100.00").appendQueryParameter("cu","INR").build();
- startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,uri));
- }catch(Exception ex){dates.setText("UPI app unavailable. Pay using the displayed UPI ID.");}});
- EditText reference=field("UPI Transaction Reference",1);
- TextView status=label("");
- button("Submit Payment",()->{String ref=reference.getText().toString().trim();if(ref.length()<8||ref.length()>80){status.setText("Enter valid transaction reference");return;}if(busy)return;busy=true;status.setText("Submitting...");String t=token,u=userId;new Thread(()->{try{CloudPurchase.submit(t,u,ref);runOnUiThread(()->{busy=false;status.setText("Submitted: Pending Admin Approval");});}catch(Exception ex){runOnUiThread(()->{busy=false;status.setText("Submission failed. Check connection or duplicate reference.");});}}).start();});
- button("Refresh Subscription",()->refreshDates(dates));
- button("Sign Out",()->{token="";userId="";loginScreen();});
- refreshDates(dates);
- }
- void refreshDates(TextView dates){String t=token;new Thread(()->{try{org.json.JSONArray a=CloudPurchase.subscription(t);String msg="Start Date: Not activated\nEnd Date: —";if(a.length()>0){JSONObject row=a.getJSONObject(0);msg="Start Date: "+row.optString("starts_at")+"\nEnd Date: "+row.optString("ends_at");}final String result=msg;runOnUiThread(()->dates.setText(result));}catch(Exception ex){runOnUiThread(()->dates.setText("Unable to load subscription. Try again."));}}).start();}
- void secretEntry(){
- if(new SecretStore(this,userId).configured()){lockScreen();return;}
- base("Set Secret Passwords");
- EditText a=field("Original password (8+ characters)",129),b=field("Hidden password (8+ characters)",129);
- TextView status=label("");
- button("Save passwords",()->{if(busy)return;char[] x=a.getText().toString().toCharArray(),y=b.getText().toString().toCharArray();a.setText("");b.setText("");busy=true;String uid=userId;new Thread(()->{try{new SecretStore(this,uid).configure(x,y);runOnUiThread(()->{busy=false;if(uid.equals(userId))lockScreen();});}catch(Exception ex){runOnUiThread(()->{busy=false;status.setText("Use two different passwords, at least 8 characters each.");});}}).start();});
- }
- long retryAt=0;int failures=0;
- void lockScreen(){base("Privacy Chat");EditText p=field("Secret password",129);TextView status=label("");
- button("Unlock",()->{if(busy)return;if(android.os.SystemClock.elapsedRealtime()<retryAt){status.setText("Try again later");return;}char[] x=p.getText().toString().toCharArray();p.setText("");busy=true;String uid=userId;new Thread(()->{int result=0;try{result=new SecretStore(this,uid).unlock(x);}catch(Exception ignored){}final int mode=result;runOnUiThread(()->{busy=false;if(!uid.equals(userId))return;if(mode==0){failures++;if(failures>=5)retryAt=android.os.SystemClock.elapsedRealtime()+30000;status.setText("Incorrect password");}else{failures=0;if(mode==1)purchaseScreen();else hiddenDashboard();}});}).start();});
- button("Sign Out",()->{token="";userId="";loginScreen();});
- }
- void hiddenDashboard(){base("Privacy Chat");label("No conversations");button("Lock",()->lockScreen());}
- boolean busy=false;
- void authenticate(EditText e,EditText p,TextView status,boolean signup){if(busy)return;String email=e.getText().toString().trim(),pass=p.getText().toString();if(email.isEmpty()||pass.isEmpty()){status.setText("Enter email and password");return;}busy=true;status.setText("Connecting...");new Thread(()->{try{JSONObject result=signup?CloudAuth.signup(email,pass):CloudAuth.login(email,pass);boolean session=!result.optString("access_token").isEmpty();runOnUiThread(()->{busy=false;if(session){token=result.optString("access_token");JSONObject user=result.optJSONObject("user");userId=user==null?"":user.optString("id");secretEntry();}else status.setText("Check your email for verification.");});}catch(Exception ex){runOnUiThread(()->{busy=false;status.setText("Authentication failed. Check credentials, email verification and internet.");});}}).start();}
+    private LinearLayout root;
+    private TextView status;
+    private final ExecutorService queue = Executors.newSingleThreadExecutor();
+    private final Handler timer = new Handler(android.os.Looper.getMainLooper());
+    private SessionVault vault;
+    private JSONObject session;
+    private int screen;
+    private boolean busy, foreground, owner;
+    private Uri pendingPhoto;
+    private String photoRoom;
+    private int failures;
+    private long retryAt;
+    private final Runnable lockTimer = this::lock;
+    interface Work { Object run() throws Exception; }
+    interface Done { void accept(Object value) throws Exception; }
+
+    @Override public void onCreate(Bundle b) {
+        super.onCreate(null);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        vault = new SessionVault(this);
+        try { session = vault.load(); } catch(Exception e) { login(); status.setText("Saved session unavailable. Sign in again."); return; }
+        if(session == null) login(); else lock();
+    }
+    @Override protected void onResume(){super.onResume();foreground=true;}
+    @Override protected void onPause(){foreground=false; if(session!=null) lock(); else {screen++;busy=false;} super.onPause();}
+    @Override protected void onDestroy(){timer.removeCallbacksAndMessages(null);queue.shutdown();super.onDestroy();}
+    @Override public void onUserInteraction(){super.onUserInteraction();armTimer();}
+    private void armTimer(){timer.removeCallbacks(lockTimer);if(owner)timer.postDelayed(lockTimer,120000);}
+    @Override public void onBackPressed(){if(owner){lock();}else super.onBackPressed();}
+    private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
+    private void page(String title){
+        screen++;busy=false;
+        ScrollView scroll=new ScrollView(this);
+        scroll.setBackgroundColor(Color.rgb(255,241,247));
+        root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(16),dp(12),dp(16),dp(20));
+        scroll.addView(root);setContentView(scroll);
+        scroll.setOnApplyWindowInsetsListener((v,i)->{v.setPadding(i.getSystemWindowInsetLeft(),i.getSystemWindowInsetTop(),i.getSystemWindowInsetRight(),i.getSystemWindowInsetBottom());return i;});scroll.requestApplyInsets();
+        TextView heading=label(title);heading.setTextSize(23);heading.setTextColor(Color.rgb(126,30,77));status=label("");
+        status.setAccessibilityLiveRegion(android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE);
+    }
+    private TextView label(String text){TextView v=new TextView(this);v.setText(text);v.setTextColor(Color.rgb(65,36,51));root.addView(v);return v;}
+    private EditText field(String hint,int type){EditText e=new EditText(this);e.setHint(hint);e.setInputType(type);e.setSaveEnabled(false);root.addView(e);return e;}
+    private void button(String title,Runnable action){Button b=new Button(this);b.setText(title);b.setAllCaps(false);root.addView(b);b.setOnClickListener(v->{if(!busy)action.run();});}
+    private void task(Work work,Done done){
+        if(busy)return;busy=true;status.setText("Working…");int version=screen;
+        queue.execute(()->{try{Object out=work.run();runOnUiThread(()->{
+            if(screen!=version||!foreground||isDestroyed())return;busy=false;status.setText("");
+            try{done.accept(out);}catch(Exception e){error(e);}
+        });}catch(Exception e){runOnUiThread(()->{if(screen==version&&foreground){busy=false;error(e);}});}});
+    }
+    private void error(Exception e){status.setText(e.getMessage()==null?"Request failed. Try again.":e.getMessage());}
+    private static JSONObject args(Object... pairs)throws JSONException{JSONObject o=new JSONObject();for(int i=0;i<pairs.length;i+=2)o.put((String)pairs[i],pairs[i+1]);return o;}
+    private String uid(){return session.optJSONObject("user").optString("id");}
+    private void login(){
+        owner=false;page("Privacy Chat");EditText email=field("Email",33),password=field("Account password",129);
+        button("Sign in",()->authenticate(email,password,false));button("Create account",()->authenticate(email,password,true));
+    }
+    private void authenticate(EditText email,EditText password,boolean signup){
+        String address=email.getText().toString().trim(),pass=password.getText().toString();password.setText("");
+        task(()->signup?CloudAuth.signup(address,pass):CloudAuth.login(address,pass),value->{
+            JSONObject result=(JSONObject)value;if(!result.has("refresh_token")){status.setText("Open the confirmation email, then sign in.");return;}
+            synchronized(this){vault.save(result);session=result;} lock();
+        });
+    }
+    private synchronized String token() throws Exception {
+        if(session==null)throw new Exception("Sign in required");
+        if(session.optLong("expires_at")<System.currentTimeMillis()/1000+90){
+            JSONObject fresh=CloudAuth.request("/auth/v1/token?grant_type=refresh_token",args("refresh_token",session.getString("refresh_token")));
+            vault.save(fresh);session=fresh;
+        }
+        return session.getString("access_token");
+    }
+    private void logout(){
+        synchronized(this){vault.clear();session=null;}pendingPhoto=null;photoRoom=null;timer.removeCallbacks(lockTimer);login();
+    }
+    private void lock(){
+        owner=false;timer.removeCallbacks(lockTimer);if(session==null){login();return;}
+        SecretStore secrets=new SecretStore(this,uid());
+        if(!secrets.configured()){
+            page("Set your two secret passwords");EditText a=field("Full chat password · 8+ characters",129),b=field("Empty view password · 8+ characters",129);
+            button("Save passwords",()->{char[] x=a.getText().toString().toCharArray(),y=b.getText().toString().toCharArray();a.setText("");b.setText("");
+                task(()->{secrets.configure(x,y);return null;},v->lock());});
+        }else{
+            page("Privacy Chat");EditText p=field("Secret password",129);
+            button("Unlock",()->{
+                if(SystemClock.elapsedRealtime()<retryAt){status.setText("Try again in 30 seconds.");return;}
+                char[] x=p.getText().toString().toCharArray();p.setText("");
+                task(()->secrets.unlock(x),v->{int mode=(Integer)v;if(mode==0){if(++failures>=5)retryAt=SystemClock.elapsedRealtime()+30000;status.setText("Incorrect password");return;}
+                    failures=0;if(mode==1){owner=true;armTimer();home();}else{pendingPhoto=null;photoRoom=null;page("Privacy Chat");label("No conversations");button("Lock",this::lock);}});
+            });
+        }
+        button("Sign out",this::logout);
+    }
+    private Object rpc(String op,JSONObject input)throws Exception{
+        String result=CloudPurchase.request("/rest/v1/rpc/privacy_chat_action",token(),args("op",op,"args",input));
+        return new JSONTokener(result).nextValue();
+    }
+    private void call(String op,Done done,Object... pairs){task(()->rpc(op,args(pairs)),done);}
+    private void home(){
+        page("Privacy Chat");button("Lock",this::lock);button("Refresh",this::home);
+        call("access",v->{JSONObject a=(JSONObject)v;if(!a.getBoolean("active")){subscription(a);return;}
+            if(pendingPhoto!=null&&photoRoom!=null){confirmPhoto();return;}
+            if(a.optBoolean("admin")){label("Admin · Free testing");button("Review UPI payments",this::reviews);}
+            else label("Active until "+a.optString("end"));
+            button("Personal chat · invite by email",()->entry(false));button("Create group",()->entry(true));
+            call("rooms",rooms->{JSONArray list=(JSONArray)rooms;if(list.length()==0)label("No conversations");
+                for(int i=0;i<list.length();i++){JSONObject row=list.getJSONObject(i);String id=row.getString("room"),title=row.getString("title");
+                    if(row.getBoolean("accepted"))button(title,()->thread(row,null));else{
+                        label("Invitation · "+title);button("Accept",()->call("accept",z->home(),"room",id));button("Decline",()->call("decline",z->home(),"room",id));}}
+            });
+        });
+    }
+    private void entry(boolean group){
+        page(group?"New group":"Personal chat");EditText e=field(group?"Group name":"Registered contact email",group?1:33);
+        button(group?"Create":"Invite",()->call(group?"group":"personal",v->home(),group?"title":"email",e.getText().toString()));button("Dashboard",this::home);
+    }
+    private void thread(JSONObject room,Long before){
+        String id=room.optString("room");page(room.optString("title"));button("Dashboard",this::home);
+        button("Members",()->members(room));button("Latest messages",()->thread(room,null));
+        EditText body=field("Message",android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        button("Send",()->call("send",z->thread(room,null),"room",id,"body",body.getText().toString()));
+        button("Choose photo",()->{photoRoom=id;Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE);try{startActivityForResult(intent,17);}catch(Exception ex){error(ex);}});
+        call("messages",v->{JSONArray messages=(JSONArray)v;if(messages.length()==40)button("Earlier messages",()->thread(room,messages.optJSONObject(0).optLong("id")));
+            for(int i=0;i<messages.length();i++){JSONObject m=messages.getJSONObject(i);label(m.optString("email")+" · "+m.optString("sent_at"));label(m.optString("body"));
+                if(m.optBoolean("photo"))button("View photo",()->call("photo",data->{byte[] bytes=Base64.decode((String)data,0);ImageView image=new ImageView(this);image.setAdjustViewBounds(true);image.setImageBitmap(BitmapFactory.decodeByteArray(bytes,0,bytes.length));root.addView(image);},"id",m.optLong("id"),"room",id));}
+        },"room",id,"before",before);
+    }
+    private void members(JSONObject room){
+        String id=room.optString("room");page("Members");button("Conversation",()->thread(room,null));
+        if(room.optBoolean("owner")&&"group".equals(room.optString("kind"))){EditText e=field("Registered member email",33);button("Invite member",()->call("invite",v->members(room),"room",id,"email",e.getText().toString()));}
+        call("members",v->{JSONArray list=(JSONArray)v;for(int i=0;i<list.length();i++){JSONObject m=list.getJSONObject(i);label(m.optString("email")+(m.optBoolean("accepted")?"":" · Invited"));if(m.optBoolean("removable"))button("Remove "+m.optString("email"),()->call("remove",z->members(room),"room",id,"person",m.optString("person")));}},"room",id);
+    }
+    @Override protected void onActivityResult(int req,int result,Intent data){super.onActivityResult(req,result,data);if(req==17&&result==RESULT_OK&&data!=null)pendingPhoto=data.getData();}
+    private String photo(Uri uri)throws Exception{
+        BitmapFactory.Options opt=new BitmapFactory.Options();opt.inJustDecodeBounds=true;
+        try(InputStream in=getContentResolver().openInputStream(uri)){BitmapFactory.decodeStream(in,null,opt);}
+        opt.inJustDecodeBounds=false;opt.inSampleSize=1;while(Math.max(opt.outWidth,opt.outHeight)/opt.inSampleSize>1280)opt.inSampleSize*=2;
+        Bitmap bitmap;try(InputStream in=getContentResolver().openInputStream(uri)){bitmap=BitmapFactory.decodeStream(in,null,opt);}
+        if(bitmap==null)throw new Exception("Unsupported picture");try(ByteArrayOutputStream bytes=new ByteArrayOutputStream()){
+            for(int quality=80;quality>=20;quality-=15){bytes.reset();bitmap.compress(Bitmap.CompressFormat.JPEG,quality,bytes);if(bytes.size()<=375000)return Base64.encodeToString(bytes.toByteArray(),Base64.NO_WRAP);}
+            throw new Exception("Choose a smaller picture");}finally{bitmap.recycle();}
+    }
+    private void confirmPhoto(){
+        page("Share selected photo");Uri uri=pendingPhoto;String room=photoRoom;
+        button("Send photo to selected conversation",()->task(()->rpc("send",args("room",room,"photo",photo(uri))),v->{pendingPhoto=null;photoRoom=null;home();}));
+        button("Discard",()->{pendingPhoto=null;photoRoom=null;home();});
+    }
+    private void subscription(JSONObject a){
+        page("Privacy Chat · ₹100 per month");label("Start: "+a.optString("start","—")+"   End: "+a.optString("end","—"));label("Last payment: "+a.optString("payment","—"));label(CloudConfig.UPI_ID);
+        button("Pay ₹100 with UPI",()->{Uri pay=Uri.parse("upi://pay").buildUpon().appendQueryParameter("pa",CloudConfig.UPI_ID).appendQueryParameter("pn","Privacy Chat").appendQueryParameter("am","100.00").appendQueryParameter("cu","INR").build();try{startActivity(new Intent(Intent.ACTION_VIEW,pay));}catch(Exception ex){status.setText("Use the displayed UPI ID in your payment app.");}});
+        EditText ref=field("UPI transaction reference",1);
+        button("Submit for verification",()->{String reference=ref.getText().toString().trim();task(()->{CloudPurchase.submit(token(),uid(),reference);return null;},v->home());});
+        button("Refresh access",this::home);button("Lock",this::lock);
+    }
+    private void reviews(){
+        page("UPI payment review");button("Dashboard",this::home);
+        call("payments",v->{JSONArray list=(JSONArray)v;if(list.length()==0)label("No pending payments");for(int i=0;i<list.length();i++){JSONObject p=list.getJSONObject(i);label(p.optString("email")+" · ₹100 · "+p.optString("reference"));button("Confirm ₹100 received",()->call("approve",z->reviews(),"id",p.optString("id")));button("Reject",()->call("reject",z->reviews(),"id",p.optString("id")));}});
+    }
 }

@@ -1,46 +1,36 @@
 name: Build Privacy Chat APK
-
 on:
   push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
+    branches: [main]
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
-
-      - name: Set up Gradle 8.9
-        uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-
-      - name: Build debug APK
-        working-directory: Privacy_Chat_Android_Studio
-        run: gradle --no-daemon :app:assembleDebug
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - run: gradle :app:assembleDebug :app:lintDebug :app:assembleDebugAndroidTest
+      - uses: actions/upload-artifact@v4
         with:
-          name: privacy-chat-debug-apk
-          path: Privacy_Chat_Android_Studio/app/build/outputs/apk/debug/app-debug.apk
+          name: Privacy-Chat-Android
+          path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-          retention-days: 14
+      - name: Enable emulator acceleration
+        run: sudo chmod 666 /dev/kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          script: |
+            adb install app/build/outputs/apk/debug/app-debug.apk
+            adb install app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+            adb shell am instrument -w com.privacychat.app.test/com.privacychat.app.SmokeRunner | tee smoke.log
+            grep -q 'PRIVACY_SMOKE_OK' smoke.log
