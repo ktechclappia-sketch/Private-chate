@@ -30,6 +30,19 @@ public class MainActivity extends Activity {
  refreshDates(dates);
  }
  void refreshDates(TextView dates){String t=token;new Thread(()->{try{org.json.JSONArray a=CloudPurchase.subscription(t);String msg="Start Date: Not activated\nEnd Date: —";if(a.length()>0){JSONObject row=a.getJSONObject(0);msg="Start Date: "+row.optString("starts_at")+"\nEnd Date: "+row.optString("ends_at");}final String result=msg;runOnUiThread(()->dates.setText(result));}catch(Exception ex){runOnUiThread(()->dates.setText("Unable to load subscription. Try again."));}}).start();}
+ void secretEntry(){
+ if(new SecretStore(this,userId).configured()){lockScreen();return;}
+ base("Set Secret Passwords");
+ EditText a=field("Original password (8+ characters)",129),b=field("Hidden password (8+ characters)",129);
+ TextView status=label("");
+ button("Save passwords",()->{if(busy)return;char[] x=a.getText().toString().toCharArray(),y=b.getText().toString().toCharArray();a.setText("");b.setText("");busy=true;String uid=userId;new Thread(()->{try{new SecretStore(this,uid).configure(x,y);runOnUiThread(()->{busy=false;if(uid.equals(userId))lockScreen();});}catch(Exception ex){runOnUiThread(()->{busy=false;status.setText("Use two different passwords, at least 8 characters each.");});}}).start();});
+ }
+ long retryAt=0;int failures=0;
+ void lockScreen(){base("Privacy Chat");EditText p=field("Secret password",129);TextView status=label("");
+ button("Unlock",()->{if(busy)return;if(android.os.SystemClock.elapsedRealtime()<retryAt){status.setText("Try again later");return;}char[] x=p.getText().toString().toCharArray();p.setText("");busy=true;String uid=userId;new Thread(()->{int result=0;try{result=new SecretStore(this,uid).unlock(x);}catch(Exception ignored){}final int mode=result;runOnUiThread(()->{busy=false;if(!uid.equals(userId))return;if(mode==0){failures++;if(failures>=5)retryAt=android.os.SystemClock.elapsedRealtime()+30000;status.setText("Incorrect password");}else{failures=0;if(mode==1)purchaseScreen();else hiddenDashboard();}});}).start();});
+ button("Sign Out",()->{token="";userId="";loginScreen();});
+ }
+ void hiddenDashboard(){base("Privacy Chat");label("No conversations");button("Lock",()->lockScreen());}
  boolean busy=false;
- void authenticate(EditText e,EditText p,TextView status,boolean signup){if(busy)return;String email=e.getText().toString().trim(),pass=p.getText().toString();if(email.isEmpty()||pass.isEmpty()){status.setText("Enter email and password");return;}busy=true;status.setText("Connecting...");new Thread(()->{try{JSONObject result=signup?CloudAuth.signup(email,pass):CloudAuth.login(email,pass);boolean session=!result.optString("access_token").isEmpty();runOnUiThread(()->{busy=false;if(session){token=result.optString("access_token");JSONObject user=result.optJSONObject("user");userId=user==null?"":user.optString("id");purchaseScreen();}else status.setText("Check your email for verification.");});}catch(Exception ex){runOnUiThread(()->{busy=false;status.setText("Authentication failed. Check credentials, email verification and internet.");});}}).start();}
+ void authenticate(EditText e,EditText p,TextView status,boolean signup){if(busy)return;String email=e.getText().toString().trim(),pass=p.getText().toString();if(email.isEmpty()||pass.isEmpty()){status.setText("Enter email and password");return;}busy=true;status.setText("Connecting...");new Thread(()->{try{JSONObject result=signup?CloudAuth.signup(email,pass):CloudAuth.login(email,pass);boolean session=!result.optString("access_token").isEmpty();runOnUiThread(()->{busy=false;if(session){token=result.optString("access_token");JSONObject user=result.optJSONObject("user");userId=user==null?"":user.optString("id");secretEntry();}else status.setText("Check your email for verification.");});}catch(Exception ex){runOnUiThread(()->{busy=false;status.setText("Authentication failed. Check credentials, email verification and internet.");});}}).start();}
 }
