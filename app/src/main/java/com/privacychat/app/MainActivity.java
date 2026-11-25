@@ -7,7 +7,7 @@ import org.json.JSONObject;
 public class MainActivity extends Activity {
  LinearLayout root;
  @Override public void onCreate(Bundle b){super.onCreate(b);loginScreen();}
- void base(String title){root=new LinearLayout(this);root.setOrientation(1);root.setPadding(40,48,40,24);root.setBackgroundColor(Color.rgb(255,240,247));setContentView(root);label(title);}
+ void base(String title){root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(40,48,40,24);root.setBackgroundColor(Color.rgb(255,240,247));setContentView(root);label(title);}
  TextView label(String s){TextView t=new TextView(this);t.setText(s);t.setTextSize(18);root.addView(t);return t;}
  EditText field(String hint,int type){EditText e=new EditText(this);e.setHint(hint);e.setInputType(type);root.addView(e);return e;}
  Button button(String s,Runnable action){Button b=new Button(this);b.setText(s);b.setOnClickListener(v->action.run());root.addView(b);return b;}
