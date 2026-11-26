@@ -64,10 +64,11 @@ async function load(expected){
   if(expected!==generation)return;
   access=accessData||{};
   const uid=session.user.id;
+  const bearer=await token(expected);
   const [payResult,subResult,deviceResult]=await Promise.all([
-    request('/rest/v1/privacy_payments?select=id,amount_paise,upi_reference,status,created_at,reviewed_at&user_id=eq.'+encodeURIComponent(uid)+'&order=created_at.desc','GET',null,await token(expected)),
-    request('/rest/v1/privacy_subscriptions?select=starts_at,ends_at&user_id=eq.'+encodeURIComponent(uid),'GET',null,await token(expected)),
-    request('/rest/v1/rpc/privacy_chat_list_devices','POST',{},await token(expected))
+    request('/rest/v1/privacy_payments?select=id,amount_paise,upi_reference,status,created_at,reviewed_at&user_id=eq.'+encodeURIComponent(uid)+'&order=created_at.desc','GET',null,bearer),
+    request('/rest/v1/privacy_subscriptions?select=starts_at,ends_at&user_id=eq.'+encodeURIComponent(uid),'GET',null,bearer),
+    request('/rest/v1/rpc/privacy_chat_list_devices','POST',{},bearer)
   ]);
   if(expected!==generation)return;
   payments=Array.isArray(payResult)?payResult:[];
@@ -97,7 +98,7 @@ async function load(expected){
 async function run(work){
   if(busy)return;busy=true;document.querySelectorAll('button').forEach(b=>b.disabled=true);
   const expected=generation;
-  try{await work(expected)}catch(e){status('app-status',e.message);if(/invalid|expired|refresh token/i.test(e.message))signOut(false)}finally{busy=false;document.querySelectorAll('button').forEach(b=>b.disabled=false)}
+  try{await work(expected)}catch(e){status('app-status',e.message);if(/invalid|expired|refresh token/i.test(e.message)){signOut(true);status('login-status','Session expired. Sign in again.')}}finally{busy=false;document.querySelectorAll('button').forEach(b=>b.disabled=false)}
 }
 function signOut(showLogin=true){
   generation++;session=null;access=null;payments=[];devices=[];
