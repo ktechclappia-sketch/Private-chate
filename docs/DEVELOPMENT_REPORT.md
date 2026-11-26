@@ -18,7 +18,8 @@ Code changes remain on the development branch; `main` is untouched. GitHub Pages
 - Added five-second polling for new messages in the active Android chat thread in `MainActivity.java`.
 - Added a two-minute inactivity lock and back-button relock for both the full-chat and empty decoy secret views in `MainActivity.java`.
 - Disabled the obsolete WebView app's mismatched Supabase configuration in `Privacy_Chat_Android_Studio/app/src/main/assets/config.js` so it cannot accidentally call the Vitthala project.
-- Added `.github/workflows/android-artifacts.yml` to build Android APK and AAB artifacts from the development branch.
+- Added `.github/workflows/android-artifacts.yml` to build debug APK, release APK, and AAB artifacts from the development branch.
+- Added optional release signing support that reads only protected GitHub Actions secrets; no signing credentials are stored in source control.
 - Added a database trigger that timestamps a payment when an admin approves or rejects it, so collection reporting uses review time.
 - Added `backend/privacy_chat_access_controls.sql` to source-control the currently deployed `enabled` / `free_testing` access flags and the matching chat/admin RPCs. The previous checked-in base SQL did not contain these deployed access-control fields, which could make a fresh restore incomplete.
 
@@ -43,9 +44,9 @@ No service-role key was added to client code. The client portal uses the project
 
 GitHub Actions run [45820351229](https://github.com/ktechclappia-sketch/Private-chate/actions/runs/45820351229) completed successfully on commit `1591211bf383f2e20e149b4a4d7ab0cb2c81d855`. It produced artifact `Privacy-Chat-Android-Artifacts` (artifact ID `15117412124`), available until 2026-12-26. It is downloadable from that run's Artifacts section.
 
-The first APK is a debug-signed sideload build. The generated release AAB is unsigned and is not ready for Play Console upload. A private Android release signing key and protected CI secrets are needed before making a Play-ready AAB. No signing secret was committed.
+The auto-lock update built successfully in run [45839784994](https://github.com/ktechclappia-sketch/Private-chate/actions/runs/45839784994), producing an artifact that expires 2026-12-26.
 
-The updated source built successfully in run [45839784994](https://github.com/ktechclappia-sketch/Private-chate/actions/runs/45839784994) on commit `a21fb3bdc2e3498ca7d2b47f4b84aca43372ce53`. It produced `Privacy-Chat-Android-Artifacts` (artifact ID `15127845677`), available until 2026-12-26. This build confirms Android compilation and artifact upload only; it is not a physical-device test.
+The signing-ready pipeline then built debug APK, release APK, and AAB successfully in run [45844445828](https://github.com/ktechclappia-sketch/Private-chate/actions/runs/45844445828) on commit `9ea98bf5143c2cda1ec7420151da35a39d086925`. Artifact `Privacy-Chat-Android-Artifacts` (artifact ID `15130152241`) is available until 2026-12-26. The build log confirms compilation and artifact upload; it does not verify real-device behavior or establish that the release outputs are signed. Protected Android signing secrets must be configured and the artifact signature verified before Play Console delivery.
 
 ## Deployment status
 
@@ -81,7 +82,7 @@ A scoped data snapshot was captured on 2026-11-26 and saved as `Privacy_Chat_DB_
 
 ## Pending issues
 
-1. Android release AAB needs private release signing configuration; current AAB is unsigned.
+1. Android release AAB and release APK signatures still need confirmation; configure the four protected GitHub Actions signing secrets and verify the signed outputs before Play Console delivery.
 2. User-level app, payment, and authenticated dashboard flow testing remains pending.
 3. Leaked Password Protection needs to be enabled in Supabase Auth settings.
 4. A scoped user-data snapshot exists, but a full PostgreSQL restore rehearsal still needs a database credential/export path that is not available through the connected tools.
