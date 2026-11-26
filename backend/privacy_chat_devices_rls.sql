@@ -87,5 +87,7 @@ revoke all on function privacy_chat.register_device(text,text,text) from public,
 revoke all on function privacy_chat.list_devices() from public,anon;
 revoke all on function public.privacy_chat_register_device(text,text,text) from public,anon;
 revoke all on function public.privacy_chat_list_devices() from public,anon;
+grant execute on function privacy_chat.register_device(text,text,text) to authenticated;
+grant execute on function privacy_chat.list_devices() to authenticated;
 grant execute on function public.privacy_chat_register_device(text,text,text) to authenticated;
 grant execute on function public.privacy_chat_list_devices() to authenticated;
