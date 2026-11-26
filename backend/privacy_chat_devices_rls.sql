@@ -91,3 +91,26 @@ grant execute on function privacy_chat.register_device(text,text,text) to authen
 grant execute on function privacy_chat.list_devices() to authenticated;
 grant execute on function public.privacy_chat_register_device(text,text,text) to authenticated;
 grant execute on function public.privacy_chat_list_devices() to authenticated;
+
+-- Capture approval/rejection time for collection reporting.
+create or replace function privacy_chat.set_payment_reviewed_at()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if old.status='pending' and new.status in ('approved','rejected') then
+    new.reviewed_at=now();
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists privacy_payment_review_timestamp on public.privacy_payments;
+create trigger privacy_payment_review_timestamp
+before update of status on public.privacy_payments
+for each row
+execute function privacy_chat.set_payment_reviewed_at();
+
+revoke all on function privacy_chat.set_payment_reviewed_at() from public,anon;
+grant execute on function privacy_chat.set_payment_reviewed_at() to authenticated;
