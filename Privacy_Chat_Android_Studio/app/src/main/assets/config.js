@@ -1,5 +1,7 @@
-// Publishable (public) key only; never use a service-role or secret key.
+// Disabled legacy webview client.
+// This copy uses an older pc_* schema and must not connect to another Supabase project.
+// The supported Android app is the root Gradle project under /app and uses the Privacy Chat RPC backend.
 window.PRIVACY_CHAT_CONFIG = {
-  supabaseUrl: 'https://shtjpxencqipxvazlyiy.supabase.co',
-  supabasePublishableKey: 'sb_publishable_3Sa0qVMxhTRIcKI29IzAtQ_4Z6xyjMy'
+  supabaseUrl: '',
+  supabasePublishableKey: ''
 };
