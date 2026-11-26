@@ -16,6 +16,7 @@ Code changes remain on the development branch; `main` is untouched. GitHub Pages
 - Linked the client portal from the existing admin page at `docs/index.html`.
 - Added authenticated device registry and device RPCs in `backend/privacy_chat_devices_rls.sql`; Android root app records this device on sign-in through `DeviceRegistry.java`.
 - Added five-second polling for new messages in the active Android chat thread in `MainActivity.java`.
+- Added a two-minute inactivity lock and back-button relock for both the full-chat and empty decoy secret views in `MainActivity.java`.
 - Disabled the obsolete WebView app's mismatched Supabase configuration in `Privacy_Chat_Android_Studio/app/src/main/assets/config.js` so it cannot accidentally call the Vitthala project.
 - Added `.github/workflows/android-artifacts.yml` to build Android APK and AAB artifacts from the development branch.
 - Added a database trigger that timestamps a payment when an admin approves or rejects it, so collection reporting uses review time.
@@ -42,12 +43,14 @@ No service-role key was added to client code. The client portal uses the project
 
 GitHub Actions run [45820351229](https://github.com/ktechclappia-sketch/Private-chate/actions/runs/45820351229) completed successfully on commit `1591211bf383f2e20e149b4a4d7ab0cb2c81d855`. It produced artifact `Privacy-Chat-Android-Artifacts` (artifact ID `15117412124`), available until 2026-12-26. It is downloadable from that run's Artifacts section.
 
-The APK is a debug-signed sideload build. The generated release AAB is unsigned and is not ready for Play Console upload. A private Android release signing key and protected CI secrets are needed before making a Play-ready AAB. No signing secret was committed.
+The first APK is a debug-signed sideload build. The generated release AAB is unsigned and is not ready for Play Console upload. A private Android release signing key and protected CI secrets are needed before making a Play-ready AAB. No signing secret was committed.
+
+The updated source built successfully in run [45839784994](https://github.com/ktechclappia-sketch/Private-chate/actions/runs/45839784994) on commit `a21fb3bdc2e3498ca7d2b47f4b84aca43372ce53`. It produced `Privacy-Chat-Android-Artifacts` (artifact ID `15127845677`), available until 2026-12-26. This build confirms Android compilation and artifact upload only; it is not a physical-device test.
 
 ## Deployment status
 
 - GitHub Pages source was changed on 2026-11-26 to the `privacy-chat-full-development` branch and `/docs` folder; the protected `main` branch was not modified.
-- Pages build and deployment run [45839106150](https://github.com/ktechclappia-sketch/Private-chate/actions/runs/45839106150) completed successfully.
+- Pages build and deployment run [45839106150](https://github.com/ktechclappia-sketch/Private-chate/actions/runs/45839106150) completed successfully after the Pages source change. Report update deployment run [45839783969](https://github.com/ktechclappia-sketch/Private-chate/actions/runs/45839783969) also completed successfully.
 - The live Admin sign-in page was verified at [https://ktechclappia-sketch.github.io/Private-chate/](https://ktechclappia-sketch.github.io/Private-chate/).
 - The live Client sign-in page was verified at [https://ktechclappia-sketch.github.io/Private-chate/client.html](https://ktechclappia-sketch.github.io/Private-chate/client.html).
 - These checks verified page loading and sign-in forms only; authenticated dashboard actions were not tested.
