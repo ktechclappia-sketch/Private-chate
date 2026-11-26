@@ -19,6 +19,7 @@ Changes are kept on the development branch. No production branch, unrelated proj
 - Disabled the obsolete WebView app's mismatched Supabase configuration in `Privacy_Chat_Android_Studio/app/src/main/assets/config.js` so it cannot accidentally call the Vitthala project.
 - Added `.github/workflows/android-artifacts.yml` to build Android APK and AAB artifacts from the development branch.
 - Added a database trigger that timestamps a payment when an admin approves or rejects it, so collection reporting uses review time.
+- Added `backend/privacy_chat_access_controls.sql` to source-control the currently deployed `enabled` / `free_testing` access flags and the matching chat/admin RPCs. The previous checked-in base SQL did not contain these deployed access-control fields, which could make a fresh restore incomplete.
 
 ## Supabase changes and security review
 
@@ -69,11 +70,16 @@ Status for every item below: **Not run**. The user requested final user testing 
 - [ ] Install and exercise the APK on a physical Android device
 - [ ] Verify Client portal through the final deployed URL
 
+## Backup status
+
+A scoped data snapshot was captured on 2026-11-26 and saved as `Privacy_Chat_DB_Backup_2026-11-26.json`. It contains only the Privacy Chat private-schema tables plus `public.privacy_subscriptions` and `public.privacy_payments`; no Accounting, KTech License, Hotel, or Trading data was exported. Snapshot counts: people 5, rooms 1, memberships 2, messages 0, devices 0, admin allowlist rows 2, subscriptions 2, payments 3. This is a data snapshot, not a full PostgreSQL physical backup or a verified restore rehearsal.
+
 ## Pending issues
 
 1. Client portal needs publishing from an approved GitHub Pages source before a working live URL can be provided.
 2. Android release AAB needs private release signing configuration; current AAB is unsigned.
 3. User-level app and payment flow testing remains pending by design.
 4. Leaked Password Protection needs to be enabled in Supabase Auth settings.
-5. Database backup and recovery export has not been configured. The Free plan does not provide automatic downloadable database backups; a secure database credential/export path is needed to create and validate an external backup. Migration source is in GitHub, but that does not back up user data.
+5. A scoped user-data snapshot now exists, but a full PostgreSQL restore rehearsal still needs a database credential/export path that is not available through the connected tools.
 6. The existing chat photo transport is not end-to-end encrypted; do not describe it as such.
+7. The checked-in migration source is now closer to the deployed schema, but the full Supabase migration history still contains older cross-project migrations for accounting and licensing. Do not replay the complete history into a new project without separating those concerns.
