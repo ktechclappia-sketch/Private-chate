@@ -25,13 +25,42 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
-      - name: Build APK and Play bundle
-        run: gradle :app:assembleDebug :app:bundleRelease
+      - name: Prepare optional Android release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          provided=0
+          for value in "$ANDROID_KEYSTORE_BASE64" "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_ALIAS" "$ANDROID_KEY_PASSWORD"; do
+            if [ -n "$value" ]; then provided=$((provided + 1)); fi
+          done
+          if [ "$provided" -eq 4 ]; then
+            keystore="$RUNNER_TEMP/privacy-chat-release.jks"
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+            test -s "$keystore"
+            echo "ANDROID_KEYSTORE_PATH=$keystore" >> "$GITHUB_ENV"
+            echo "Release signing configured from protected GitHub secrets."
+          elif [ "$provided" -eq 0 ]; then
+            echo "Release signing secrets are not configured; release outputs will be unsigned."
+          else
+            echo "Release signing secrets are incomplete; refusing a partial signing configuration."
+            exit 1
+          fi
+      - name: Build APKs and Play bundle
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: gradle :app:assembleDebug :app:assembleRelease :app:bundleRelease
       - uses: actions/upload-artifact@v4
         with:
           name: Privacy-Chat-Android-Artifacts
           path: |
             app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/release/app-release.apk
             app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 30
