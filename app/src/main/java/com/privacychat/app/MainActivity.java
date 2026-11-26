@@ -29,7 +29,12 @@ public class MainActivity extends Activity {
     private Uri pendingPhoto;
     private String photoRoom;
     private String accessState;
+    private JSONObject activeRoom;
+    private LinearLayout messageList;
+    private ScrollView pageScroll;
+    private long newestMessage;
     private int unlockGeneration;
+    private final Runnable messagePoll = this::pollMessages;
     private final Runnable accessCheck = this::checkAccess;
     private final Runnable lockTimer = this::lock;
     interface Work { Object run() throws Exception; }
@@ -50,8 +55,9 @@ public class MainActivity extends Activity {
     @Override public void onBackPressed(){if(owner){lock();}else super.onBackPressed();}
     private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
     private void page(String title){
+        timer.removeCallbacks(messagePoll);activeRoom=null;messageList=null;
         screen++;busy=false;
-        ScrollView scroll=new ScrollView(this);
+        ScrollView scroll=new ScrollView(this);pageScroll=scroll;
         scroll.setBackgroundColor(Color.rgb(255,241,247));
         root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(16),dp(12),dp(16),dp(20));
         scroll.addView(root);setContentView(scroll);
@@ -182,14 +188,51 @@ public class MainActivity extends Activity {
     }
     private void thread(JSONObject room,Long before){
         String id=room.optString("room");page(room.optString("title"));button("Dashboard",this::home);
-        button("Members",()->members(room));button("Latest messages",()->thread(room,null));
+        button("Members",()->members(room));button("Latest messages · auto-sync",()->thread(room,null));
         EditText body=field("Message",android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);
         button("Send",()->call("send",z->thread(room,null),"room",id,"body",body.getText().toString()));
         button("Choose photo",()->{photoRoom=id;Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE);try{startActivityForResult(intent,17);}catch(Exception ex){error(ex);}});
-        call("messages",v->{JSONArray messages=(JSONArray)v;if(messages.length()==40)button("Earlier messages",()->thread(room,messages.optJSONObject(0).optLong("id")));
-            for(int i=0;i<messages.length();i++){JSONObject m=messages.getJSONObject(i);label(m.optString("email")+" · "+m.optString("sent_at"));label(m.optString("body"));
-                if(m.optBoolean("photo"))button("View photo",()->call("photo",data->{byte[] bytes=Base64.decode((String)data,0);ImageView image=new ImageView(this);image.setAdjustViewBounds(true);image.setImageBitmap(BitmapFactory.decodeByteArray(bytes,0,bytes.length));root.addView(image);},"id",m.optLong("id"),"room",id));}
+        messageList=new LinearLayout(this);messageList.setOrientation(LinearLayout.VERTICAL);root.addView(messageList);
+        newestMessage=0;
+        if(before==null)activeRoom=room;
+        call("messages",v->{
+            JSONArray messages=(JSONArray)v;
+            if(messages.length()==40)button("Earlier messages",()->thread(room,messages.optJSONObject(0).optLong("id")));
+            appendMessages(room,messages,false);
+            if(activeRoom==room)timer.postDelayed(messagePoll,5000);
         },"room",id,"before",before);
+    }
+    private void appendMessages(JSONObject room,JSONArray messages,boolean onlyNew)throws Exception{
+        if(messageList==null)return;
+        for(int i=0;i<messages.length();i++){
+            JSONObject m=messages.getJSONObject(i);long messageId=m.optLong("id");
+            if(onlyNew&&messageId<=newestMessage)continue;
+            TextView who=new TextView(this);who.setText(m.optString("email")+" · "+m.optString("sent_at"));who.setTextColor(Color.rgb(126,30,77));
+            TextView body=new TextView(this);body.setText(m.optString("body"));body.setTextColor(Color.rgb(65,36,51));
+            messageList.addView(who);messageList.addView(body);
+            if(m.optBoolean("photo")){
+                Button viewPhoto=new Button(this);viewPhoto.setText("View photo");viewPhoto.setAllCaps(false);messageList.addView(viewPhoto);
+                viewPhoto.setOnClickListener(v->call("photo",data->{byte[] bytes=Base64.decode((String)data,0);ImageView image=new ImageView(this);image.setAdjustViewBounds(true);image.setImageBitmap(BitmapFactory.decodeByteArray(bytes,0,bytes.length));messageList.addView(image);},"id",m.optLong("id"),"room",room.optString("room")));
+            }
+            if(messageId>newestMessage)newestMessage=messageId;
+        }
+        if(pageScroll!=null)pageScroll.post(()->pageScroll.fullScroll(android.view.View.FOCUS_DOWN));
+    }
+    private void pollMessages(){
+        if(!owner||!foreground||activeRoom==null||messageList==null)return;
+        final JSONObject room=activeRoom;final int version=screen;final String id=room.optString("room");
+        queue.execute(()->{
+            try{
+                JSONArray messages=(JSONArray)rpc("messages",args("room",id));
+                runOnUiThread(()->{
+                    if(version!=screen||activeRoom!=room||!owner||!foreground||isDestroyed())return;
+                    try{appendMessages(room,messages,true);}catch(Exception e){error(e);}
+                    timer.postDelayed(messagePoll,5000);
+                });
+            }catch(Exception e){
+                runOnUiThread(()->{if(version==screen&&activeRoom==room&&owner&&foreground&&!isDestroyed())timer.postDelayed(messagePoll,5000);});
+            }
+        });
     }
     private void members(JSONObject room){
         String id=room.optString("room");page("Members");button("Conversation",()->thread(room,null));
