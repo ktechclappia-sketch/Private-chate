@@ -1,0 +1,37 @@
+name: Build Privacy Chat APK and AAB
+on:
+  push:
+    branches: [privacy-chat-full-development]
+    paths:
+      - "app/**"
+      - "*.gradle"
+      - "gradle.properties"
+      - ".github/workflows/android-artifacts.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: privacy-chat-full-development
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Build APK and Play bundle
+        run: gradle :app:assembleDebug :app:bundleRelease
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Privacy-Chat-Android-Artifacts
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 30
