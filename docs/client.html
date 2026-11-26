@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f7f8">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://plwpjflifvndejidiwqa.supabase.co; img-src 'self' data:; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <title>Privacy Chat · Client Dashboard</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./client.css">
+  <script defer src="./client.js"></script>
+</head>
+<body>
+  <section id="login" class="login-wrap">
+    <div class="login-brand"><span class="logo">K</span><div><b>KTech</b><small>CLIENT ACCOUNT</small></div></div>
+    <div class="login-card">
+      <span class="eyebrow">PRIVACY CHAT</span>
+      <h1>Welcome back</h1>
+      <p>Sign in with the verified email you use in Privacy Chat.</p>
+      <form id="login-form">
+        <label>Email address<input id="email" type="email" required autocomplete="username" autocapitalize="none"></label>
+        <label>Password<input id="password" type="password" required autocomplete="current-password"></label>
+        <button class="primary" type="submit">Sign in</button>
+      </form>
+      <p id="login-status" class="status" role="status" aria-live="polite"></p>
+      <p class="hint">New accounts are created in the Privacy Chat Android app. Verify your email before signing in here.</p>
+    </div>
+  </section>
+
+  <div id="app" class="app-shell" hidden>
+    <aside class="sidebar">
+      <div class="side-brand"><span class="logo">K</span><div><b>KTech</b><small>CLIENT PORTAL</small></div></div>
+      <div class="welcome"><span class="avatar">AK</span><div><small>Welcome,</small><b id="user-email">Client</b></div></div>
+      <nav aria-label="Client dashboard">
+        <button type="button" class="nav-link current" data-section="overview">▦ <span>Dashboard</span></button>
+        <button type="button" class="nav-link" data-section="profile">♙ <span>My Profile</span></button>
+        <button type="button" class="nav-link" data-section="subscription">◷ <span>My Subscription</span></button>
+        <button type="button" class="nav-link" data-section="payments">▤ <span>My Payments</span></button>
+        <button type="button" class="nav-link" data-section="devices">▣ <span>My Devices</span></button>
+        <button type="button" class="nav-link" data-section="support">♡ <span>Support / Help</span></button>
+      </nav>
+      <button id="logout" class="logout">↪ <span>Logout</span></button>
+    </aside>
+    <main class="main">
+      <header class="topbar"><div><small>CLIENT PORTAL</small><strong>Privacy Chat</strong></div><button id="refresh" class="refresh">Refresh</button></header>
+      <p id="app-status" class="status" role="status" aria-live="polite"></p>
+
+      <section id="overview" class="section">
+        <div class="page-heading"><div><span class="eyebrow">YOUR ACCOUNT</span><h1>Client Dashboard</h1><p>Manage your Privacy Chat subscription and devices.</p></div><span id="status-badge" class="badge muted">Checking</span></div>
+        <div class="overview-grid">
+          <article class="card subscription-card">
+            <div class="card-heading"><div><small>SUBSCRIPTION STATUS</small><h2 id="overview-status">Checking access</h2></div><span class="card-icon">◷</span></div>
+            <div class="plan-line"><span>Monthly plan</span><strong>₹100 <small>/ month</small></strong></div>
+            <div class="dates"><div><small>START DATE</small><b id="start-date">—</b></div><div><small>END DATE</small><b id="end-date">—</b></div></div>
+            <button class="primary" data-go="subscription">View subscription</button>
+          </article>
+          <article class="card product-card">
+            <small>MY APP</small><div class="product-icon">✿</div><h2>Privacy Chat</h2>
+            <p>Private personal and group conversations.</p><span class="badge" id="app-access">Access status pending</span>
+            <a class="outline-btn" href="https://github.com/ktechclappia-sketch/Private-chate/actions/workflows/android-apk.yml" target="_blank" rel="noopener noreferrer">Download Android APK ↗</a>
+          </article>
+          <article class="card profile-card">
+            <small>MY PROFILE</small><h2 id="profile-email">—</h2><p>Verified Privacy Chat account</p>
+            <button class="text-btn" data-go="profile">View profile →</button>
+          </article>
+          <article class="card device-card">
+            <small>REGISTERED DEVICES</small><strong id="device-count">0</strong><p>Devices signed in to this dashboard</p>
+            <button class="text-btn" data-go="devices">Manage devices →</button>
+          </article>
+        </div>
+        <article class="card recent-card"><div class="section-title"><div><small>PAYMENT ACTIVITY</small><h2>Recent Payments</h2></div><button class="text-btn" data-go="payments">View all →</button></div><div id="recent-payments"></div></article>
+      </section>
+
+      <section id="profile" class="section" hidden>
+        <div class="page-heading"><div><span class="eyebrow">ACCOUNT DETAILS</span><h1>My Profile</h1><p>Your verified sign-in details.</p></div></div>
+        <article class="card detail-card"><div class="profile-large">♙</div><div><small>REGISTERED EMAIL</small><h2 id="profile-email-full">—</h2><p id="verified-label">Verified by Supabase Auth</p></div></article>
+      </section>
+
+      <section id="subscription" class="section" hidden>
+        <div class="page-heading"><div><span class="eyebrow">PLAN & BILLING</span><h1>My Subscription</h1><p>Monthly access to Privacy Chat.</p></div></div>
+        <div class="subscription-grid">
+          <article class="card"><small>CURRENT PLAN</small><h2>Privacy Chat Monthly</h2><div class="big-price">₹100 <small>/ month</small></div><div class="detail-row"><span>Status</span><b id="subscription-status">—</b></div><div class="detail-row"><span>Start date</span><b id="subscription-start">—</b></div><div class="detail-row"><span>End date</span><b id="subscription-end">—</b></div></article>
+          <article class="card renew-card"><small>RENEW SUBSCRIPTION</small><h2>Pay ₹100 by UPI</h2><p>Pay to the KTech UPI ID, then submit your UPI transaction reference. Access starts after admin approval.</p><a id="upi-link" class="primary pay-link" href="#">Open UPI app</a><div class="upi-row"><code>9923237174-2@ybl</code><button id="copy-upi" type="button" class="text-btn">Copy</button></div><form id="payment-form"><label>UPI transaction reference<input id="upi-reference" required minlength="8" maxlength="80" autocomplete="off" placeholder="Enter UPI reference"></label><button class="primary" type="submit">Submit for approval</button></form><p id="payment-status" class="status" role="status" aria-live="polite"></p></article>
+        </div>
+      </section>
+
+      <section id="payments" class="section" hidden>
+        <div class="page-heading"><div><span class="eyebrow">TRANSACTION RECORDS</span><h1>My Payments</h1><p>UPI payments and their approval status.</p></div></div>
+        <article class="card"><div id="payments-list"></div></article>
+      </section>
+
+      <section id="devices" class="section" hidden>
+        <div class="page-heading"><div><span class="eyebrow">SIGNED-IN DEVICES</span><h1>My Devices</h1><p>Devices that have opened your client dashboard.</p></div></div>
+        <article class="card"><div id="devices-list"></div></article>
+      </section>
+
+      <section id="support" class="section" hidden>
+        <div class="page-heading"><div><span class="eyebrow">HELP CENTER</span><h1>Support / Help</h1><p>Get help with account access and subscription payments.</p></div></div>
+        <div class="overview-grid"><article class="card"><span class="card-icon">?</span><h2>Sign-in help</h2><p>Use the same verified email address registered in the Android app. If you have forgotten your password, reset it through the app’s sign-in screen.</p></article><article class="card"><span class="card-icon">₹</span><h2>Payment help</h2><p>Submit the UPI transaction reference after completing payment. A pending payment becomes active after KTech admin verification.</p></article></div>
+      </section>
+      <footer>Privacy Chat · KTech IT Hub · Secure account access</footer>
+    </main>
+  </div>
+</body>
+</html>
