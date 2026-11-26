@@ -78,7 +78,14 @@ public class MainActivity extends Activity {
     }
     private void authenticate(EditText email,EditText password,boolean signup){
         String address=email.getText().toString().trim(),pass=password.getText().toString();password.setText("");
-        task(()->signup?CloudAuth.signup(address,pass):CloudAuth.login(address,pass),value->{
+        task(()->{
+            JSONObject result=signup?CloudAuth.signup(address,pass):CloudAuth.login(address,pass);
+            if(!signup&&result.has("refresh_token")){
+                try{DeviceRegistry.register(getApplicationContext(),result.getString("access_token"));}
+                catch(Exception ignored){/* Device registration must not block sign-in. */}
+            }
+            return result;
+        },value->{
             JSONObject result=(JSONObject)value;if(!result.has("refresh_token")){status.setText("Open the confirmation email, then sign in.");return;}
             synchronized(this){vault.save(result);session=result;} lock();
         });
