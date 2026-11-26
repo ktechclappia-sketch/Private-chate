@@ -25,7 +25,7 @@ public class MainActivity extends Activity {
     private SessionVault vault;
     private JSONObject session;
     private int screen;
-    private boolean busy, foreground, owner;
+    private boolean busy, foreground, owner, unlocked;
     private Uri pendingPhoto;
     private String photoRoom;
     private String accessState;
@@ -51,8 +51,8 @@ public class MainActivity extends Activity {
     @Override protected void onPause(){foreground=false; if(session!=null) lock(); else {screen++;busy=false;} super.onPause();}
     @Override protected void onDestroy(){timer.removeCallbacksAndMessages(null);queue.shutdown();super.onDestroy();}
     @Override public void onUserInteraction(){super.onUserInteraction();armTimer();}
-    private void armTimer(){timer.removeCallbacks(lockTimer);if(owner)timer.postDelayed(lockTimer,120000);}
-    @Override public void onBackPressed(){if(owner){lock();}else super.onBackPressed();}
+    private void armTimer(){timer.removeCallbacks(lockTimer);if(unlocked)timer.postDelayed(lockTimer,120000);}
+    @Override public void onBackPressed(){if(unlocked){lock();}else super.onBackPressed();}
     private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
     private void page(String title){
         timer.removeCallbacks(messagePoll);activeRoom=null;messageList=null;
@@ -113,7 +113,7 @@ public class MainActivity extends Activity {
         cancelAccessChecks();pendingPhoto=null;photoRoom=null;timer.removeCallbacks(lockTimer);login();
     }
     private void lock(){
-        owner=false;cancelAccessChecks();timer.removeCallbacks(lockTimer);if(session==null){login();return;}
+        owner=false;unlocked=false;cancelAccessChecks();timer.removeCallbacks(lockTimer);if(session==null){login();return;}
         SecretStore secrets=new SecretStore(this,uid());
         if(!secrets.configured()){
             page("Set your two secret passwords");EditText a=field("Full chat password · 8+ characters",129),b=field("Empty view password · 8+ characters",129);
@@ -125,7 +125,7 @@ public class MainActivity extends Activity {
                 if(secrets.retryDelay()>0){status.setText("Try again in 30 seconds.");return;}
                 char[] x=p.getText().toString().toCharArray();p.setText("");
                 task(()->secrets.unlock(x),v->{int mode=(Integer)v;if(mode==0){status.setText("Incorrect password");return;}
-                    if(mode==1){owner=true;armTimer();home();}else{pendingPhoto=null;photoRoom=null;page("Privacy Chat");label("No conversations");button("Lock",this::lock);}});
+                    if(mode==1){owner=true;unlocked=true;armTimer();home();}else{owner=false;unlocked=true;armTimer();pendingPhoto=null;photoRoom=null;page("Privacy Chat");label("No conversations");button("Lock",this::lock);}});
             });
         }
         button("Sign out",this::logout);
