@@ -8,7 +8,7 @@ Repository: [ktechclappia-sketch/Private-chate](https://github.com/ktechclappia-
 Development branch: [privacy-chat-full-development](https://github.com/ktechclappia-sketch/Private-chate/tree/privacy-chat-full-development)  
 Supabase project: KTech IT Hub (`plwpjflifvndejidiwqa`)
 
-Changes are kept on the development branch. No production branch, unrelated project schema, paid plan, or GitHub Pages settings were changed.
+Code changes remain on the development branch; `main` is untouched. GitHub Pages now publishes from `privacy-chat-full-development/docs`. No unrelated project schema or paid plan was changed.
 
 ## Implemented on the development branch
 
@@ -40,15 +40,17 @@ No service-role key was added to client code. The client portal uses the project
 
 ## Build evidence
 
-GitHub Actions run [45820351229](https://github.com/ktechclappia-sketch/Private-chate/actions/runs/45820351229) completed successfully on commit `1591211bf383f2e20e149b4a4d7ab0cb2c81d855`. It produced artifact `Privacy-Chat-Android-Artifacts` (artifact ID `15117412124`), available until 2026-12-26. The artifact contains the build outputs; it is downloadable from the run's Artifacts section.
+GitHub Actions run [45820351229](https://github.com/ktechclappia-sketch/Private-chate/actions/runs/45820351229) completed successfully on commit `1591211bf383f2e20e149b4a4d7ab0cb2c81d855`. It produced artifact `Privacy-Chat-Android-Artifacts` (artifact ID `15117412124`), available until 2026-12-26. It is downloadable from that run's Artifacts section.
 
 The APK is a debug-signed sideload build. The generated release AAB is unsigned and is not ready for Play Console upload. A private Android release signing key and protected CI secrets are needed before making a Play-ready AAB. No signing secret was committed.
 
 ## Deployment status
 
-- Existing Admin page is currently reachable at [GitHub Pages](https://ktechclappia-sketch.github.io/Private-chate/).
-- The new Client page is present on the development branch, but `https://ktechclappia-sketch.github.io/Private-chate/client.html` returned GitHub Pages 404 during verification. Pages is serving another branch/source. Publishing the new page requires changing the Pages source or merging the development branch. That publication has not been done because the earlier project instruction requires approval before publishing or changing external hosting.
-- Supabase production project migrations have been applied as listed above.
+- GitHub Pages source was changed on 2026-11-26 to the `privacy-chat-full-development` branch and `/docs` folder; the protected `main` branch was not modified.
+- Pages build and deployment run [45839106150](https://github.com/ktechclappia-sketch/Private-chate/actions/runs/45839106150) completed successfully.
+- The live Admin sign-in page was verified at [https://ktechclappia-sketch.github.io/Private-chate/](https://ktechclappia-sketch.github.io/Private-chate/).
+- The live Client sign-in page was verified at [https://ktechclappia-sketch.github.io/Private-chate/client.html](https://ktechclappia-sketch.github.io/Private-chate/client.html).
+- These checks verified page loading and sign-in forms only; authenticated dashboard actions were not tested.
 
 ## Final user testing checklist
 
@@ -68,7 +70,7 @@ Status for every item below: **Not run**. The user requested final user testing 
 - [ ] Device list on multiple Android devices
 - [ ] Cross-user data access denial with separate test accounts
 - [ ] Install and exercise the APK on a physical Android device
-- [ ] Verify Client portal through the final deployed URL
+- [ ] Verify Client portal authenticated flows through the deployed URL
 
 ## Backup status
 
@@ -76,10 +78,9 @@ A scoped data snapshot was captured on 2026-11-26 and saved as `Privacy_Chat_DB_
 
 ## Pending issues
 
-1. Client portal needs publishing from an approved GitHub Pages source before a working live URL can be provided.
-2. Android release AAB needs private release signing configuration; current AAB is unsigned.
-3. User-level app and payment flow testing remains pending by design.
-4. Leaked Password Protection needs to be enabled in Supabase Auth settings.
-5. A scoped user-data snapshot now exists, but a full PostgreSQL restore rehearsal still needs a database credential/export path that is not available through the connected tools.
-6. The existing chat photo transport is not end-to-end encrypted; do not describe it as such.
-7. The checked-in migration source is now closer to the deployed schema, but the full Supabase migration history still contains older cross-project migrations for accounting and licensing. Do not replay the complete history into a new project without separating those concerns.
+1. Android release AAB needs private release signing configuration; current AAB is unsigned.
+2. User-level app, payment, and authenticated dashboard flow testing remains pending.
+3. Leaked Password Protection needs to be enabled in Supabase Auth settings.
+4. A scoped user-data snapshot exists, but a full PostgreSQL restore rehearsal still needs a database credential/export path that is not available through the connected tools.
+5. The existing chat photo transport is not end-to-end encrypted; do not describe it as such.
+6. The checked-in migration source is now closer to the deployed schema, but the full Supabase migration history still contains older cross-project migrations for accounting and licensing. Do not replay the complete history into a new project without separating those concerns.
