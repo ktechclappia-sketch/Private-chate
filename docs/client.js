@@ -98,7 +98,15 @@ async function load(expected){
 async function run(work){
   if(busy)return;busy=true;document.querySelectorAll('button').forEach(b=>b.disabled=true);
   const expected=generation;
-  try{await work(expected)}catch(e){status('app-status',e.message);if(/invalid|expired|refresh token/i.test(e.message)){signOut(true);status('login-status','Session expired. Sign in again.')}}finally{busy=false;document.querySelectorAll('button').forEach(b=>b.disabled=false)}
+  try{await work(expected)}catch(e){
+    const message=e.message||'Network request failed.';
+    status('app-status','Dashboard data could not load: '+message+' Tap Refresh to retry.');
+    $('status-badge').textContent='Connection issue';$('status-badge').className='badge muted';
+    $('overview-status').textContent='Unable to load account access';
+    $('subscription-status').textContent='Unavailable';
+    $('app-access').textContent='Status unavailable';$('app-access').className='badge muted';
+    if(/invalid|expired|refresh token/i.test(message)){signOut(true);status('login-status','Session expired. Sign in again.')}
+  }finally{busy=false;document.querySelectorAll('button').forEach(b=>b.disabled=false)}
 }
 function signOut(showLogin=true){
   generation++;session=null;access=null;payments=[];devices=[];
@@ -116,7 +124,7 @@ async function registerDevice(expected){
   await request('/rest/v1/rpc/privacy_chat_register_device','POST',{p_device_key:deviceKey(),p_device_name:label,p_platform:platform},await token(expected));
 }
 async function login(e){
-  e.preventDefault();if(busy)return;status('login-status','Signing in…');$('login-status').classList.remove('error');
+  e.preventDefault();if(busy)return;status('login-status','Signing in and loading your dashboard…');$('login-status').classList.remove('error');
   const email=$('email').value.trim().toLowerCase(),password=$('password').value;
   try{
     session=await request('/auth/v1/token?grant_type=password','POST',{email,password});
@@ -127,10 +135,15 @@ async function login(e){
     if(!result)throw new Error('Account access could not be loaded.');
     access=result;
     await registerDevice(expected);
+    await load(expected);
     $('login').hidden=true;$('app').hidden=false;
     $('user-email').textContent=session.user.email||'Client';
-    await load(expected);showSection(current);
-  }catch(e){session=null;status('login-status',e.message);$('login-status').classList.add('error')}
+    showSection(current);
+  }catch(e){
+    session=null;$('password').value='';
+    status('login-status',e.message||'Dashboard could not load. Check the connection and try again.');
+    $('login-status').classList.add('error');
+  }
 }
 function submitPayment(e){
   e.preventDefault();run(async expected=>{
