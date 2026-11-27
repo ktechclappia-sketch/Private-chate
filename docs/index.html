@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#a51e60">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://plwpjflifvndejidiwqa.supabase.co; img-src 'self' data:; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://plwpjflifvndejidiwqa.supabase.co; img-src 'self' data: https://plwpjflifvndejidiwqa.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
   <title>Privacy Chat · Admin Dashboard</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="./admin.css">
@@ -71,5 +71,7 @@
 <dialog id="confirm">
   <form method="dialog"><h2 id="confirm-title"></h2><p id="confirm-detail"></p><div class="dialog-buttons"><button value="cancel">Cancel</button><button value="confirm" class="primary" id="confirm-ok">Confirm</button></div></form>
 </dialog>
+<dialog id="request-dialog"><form method="dialog" class="request-form"><h2>Request customer payment</h2><p id="request-customer"></p><label>Reason to show the customer<textarea id="request-reason" minlength="5" maxlength="500" required placeholder="Your monthly subscription has expired. Please pay ₹100 to renew access."></textarea></label><div class="dialog-buttons"><button value="cancel">Cancel</button><button value="send" class="primary">Send request</button></div></form></dialog>
+<dialog id="proof-dialog"><form method="dialog"><h2>Payment screenshot</h2><img id="proof-image" alt="Customer payment proof screenshot"><div class="dialog-buttons"><button value="close">Close</button></div></form></dialog>
 </body>
 </html>
