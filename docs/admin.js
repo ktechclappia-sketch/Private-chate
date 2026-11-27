@@ -195,7 +195,7 @@ function viewProof(path) {
     if(expected!==generation)return;
     const url=result.signedURL||'';
     if(!url)throw new Error('Could not load the private screenshot.');
-    byId('proof-image').src=url.startsWith('http')?url:base+url;
+    byId('proof-image').src=url.startsWith('http')?url:base+(url.startsWith('/storage/v1/')?url:'/storage/v1'+url);
     byId('proof-dialog').showModal();
   });
 }
