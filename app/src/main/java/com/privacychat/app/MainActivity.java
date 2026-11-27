@@ -176,6 +176,7 @@ public class MainActivity extends Activity {
             if(a.optBoolean("admin")){label("Admin · Free testing");button("Review UPI payments",this::reviews);}
             else if(a.optBoolean("free_testing"))label("Free testing access");
             else label("Active until "+displayValue(a,"end"));
+            if(!a.optBoolean("admin"))button("Subscription / payment request",()->subscription(a));
             button("Personal chat · invite by email",()->entry(false));button("Create group",()->entry(true));
             call("rooms",rooms->{JSONArray list=(JSONArray)rooms;if(list.length()==0)label("No conversations");
                 for(int i=0;i<list.length();i++){JSONObject row=list.getJSONObject(i);String id=row.getString("room"),title=row.getString("title");
@@ -265,7 +266,7 @@ public class MainActivity extends Activity {
         page("Privacy Chat · ₹100 per month");
         label("Start: "+displayValue(a,"start")+"   End: "+displayValue(a,"end"));
         label("Plan: ₹100 per month · UPI: "+CloudConfig.UPI_ID);
-        if(requests.length()==0)label("No payment request has been sent by Admin yet. Please wait for an in-app request.");
+        if(requests.length()==0){\n            if("pending".equalsIgnoreCase(a.optString("payment")))label("Your previous payment is pending Admin approval. Do not submit it again.");\n            else label("No payment request has been sent by Admin yet. Please wait for an in-app request.");\n        }
         for(int i=0;i<requests.length();i++){
             JSONObject r=requests.getJSONObject(i);String id=r.optString("id"),state=r.optString("status","requested");
             label("Admin payment request · "+state.toUpperCase());
