@@ -1,0 +1,1 @@
+alter table privacy_chat.payment_requests drop column if exists payment_request_id;
