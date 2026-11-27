@@ -68,3 +68,5 @@ dialog p{margin:10px 0 18px;overflow-wrap:anywhere}
   .title{margin:19px 0 13px}.filters label:last-child{flex:1 1 130px}
 }
 @media(max-width:390px){.brand-role{display:none}.bar,main{padding-left:12px;padding-right:12px}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}nav button{padding:7px 9px}}
+
+dialog{border:1px solid var(--edge);border-radius:14px;width:min(560px,calc(100% - 24px));padding:18px;color:var(--ink)}dialog::backdrop{background:#20121dcc}.request-form label{display:grid;gap:6px}textarea{font:inherit;min-height:120px;padding:10px;border:1px solid #c7a8b7;border-radius:8px;resize:vertical}#proof-image{display:block;max-width:min(80vw,720px);max-height:72vh;object-fit:contain;margin:10px auto}
