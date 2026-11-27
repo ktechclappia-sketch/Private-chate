@@ -28,6 +28,8 @@ public class MainActivity extends Activity {
     private boolean busy, foreground, owner, unlocked;
     private Uri pendingPhoto;
     private String photoRoom;
+    private Uri pendingPaymentProof;
+    private String paymentProofRequestId;
     private String accessState;
     private JSONObject activeRoom;
     private LinearLayout messageList;
@@ -239,7 +241,7 @@ public class MainActivity extends Activity {
         if(room.optBoolean("owner")&&"group".equals(room.optString("kind"))){EditText e=field("Registered member email",33);button("Invite member",()->call("invite",v->members(room),"room",id,"email",e.getText().toString()));}
         call("members",v->{JSONArray list=(JSONArray)v;for(int i=0;i<list.length();i++){JSONObject m=list.getJSONObject(i);label(m.optString("email")+(m.optBoolean("accepted")?"":" · Invited"));if(m.optBoolean("removable"))button("Remove "+m.optString("email"),()->call("remove",z->members(room),"room",id,"person",m.optString("person")));}},"room",id);
     }
-    @Override protected void onActivityResult(int req,int result,Intent data){super.onActivityResult(req,result,data);if(req==17&&result==RESULT_OK&&data!=null)pendingPhoto=data.getData();}
+    @Override protected void onActivityResult(int req,int result,Intent data){super.onActivityResult(req,result,data);if(result==RESULT_OK&&data!=null){if(req==17)pendingPhoto=data.getData();else if(req==18){pendingPaymentProof=data.getData();status.setText("Payment screenshot attached.");}}}
     private String photo(Uri uri)throws Exception{
         BitmapFactory.Options opt=new BitmapFactory.Options();opt.inJustDecodeBounds=true;
         try(InputStream in=getContentResolver().openInputStream(uri)){BitmapFactory.decodeStream(in,null,opt);}
@@ -256,14 +258,40 @@ public class MainActivity extends Activity {
     }
     private static String displayValue(JSONObject o,String key){return o.isNull(key)?"—":o.optString(key);}
     private void subscription(JSONObject a){
-        page("Privacy Chat · ₹100 per month");label("Start: "+displayValue(a,"start")+"   End: "+displayValue(a,"end"));label("Last payment: "+displayValue(a,"payment"));label(CloudConfig.UPI_ID);
-        if("pending".equalsIgnoreCase(a.optString("payment"))){
-            label("Payment is pending admin approval. Do not submit it again.");
-            button("My account",this::account);button("Refresh access",this::home);button("Lock",this::lock);return;
+        page("Privacy Chat · ₹100 per month");label("Loading payment requests…");
+        task(()->CloudPurchase.paymentRequests(token()),value->renderSubscription(a,(JSONArray)value));
+    }
+    private void renderSubscription(JSONObject a,JSONArray requests)throws Exception{
+        page("Privacy Chat · ₹100 per month");
+        label("Start: "+displayValue(a,"start")+"   End: "+displayValue(a,"end"));
+        label("Plan: ₹100 per month · UPI: "+CloudConfig.UPI_ID);
+        if(requests.length()==0)label("No payment request has been sent by Admin yet. Please wait for an in-app request.");
+        for(int i=0;i<requests.length();i++){
+            JSONObject r=requests.getJSONObject(i);String id=r.optString("id"),state=r.optString("status","requested");
+            label("Admin payment request · "+state.toUpperCase());
+            label("Reason: "+r.optString("reason","—"));
+            if("pending".equalsIgnoreCase(state)){
+                label("UTR "+r.optString("utr_number","—")+" · Payment proof submitted for Admin approval.");
+            }else if("approved".equalsIgnoreCase(state)){
+                label("Payment approved by Admin.");
+            }else{
+                if("rejected".equalsIgnoreCase(state))label("Payment was rejected. Review the note: "+r.optString("admin_note","Please resubmit the correct proof."));
+                button("Pay ₹100 with UPI",()->{Uri pay=Uri.parse("upi://pay").buildUpon().appendQueryParameter("pa",CloudConfig.UPI_ID).appendQueryParameter("pn","Privacy Chat").appendQueryParameter("am","100.00").appendQueryParameter("cu","INR").build();try{startActivity(new Intent(Intent.ACTION_VIEW,pay));}catch(Exception ex){status.setText("Use the displayed UPI ID in your payment app.");}});
+                EditText utr=field("UTR / transaction number",33);
+                button(pendingPaymentProof!=null&&id.equals(paymentProofRequestId)?"Screenshot attached · choose another":"Attach payment screenshot",()->{
+                    paymentProofRequestId=id;Intent pick=new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE);
+                    try{startActivityForResult(pick,18);}catch(Exception ex){error(ex);}
+                });
+                button("Resubmit for Admin approval",()->{
+                    String number=utr.getText().toString().trim();Uri proof=pendingPaymentProof;
+                    if(number.length()<8||number.length()>80){status.setText("Enter the UTR number (8–80 characters).");return;}
+                    if(proof==null||!id.equals(paymentProofRequestId)){status.setText("Attach a screenshot of the payment first.");return;}
+                    task(()->{byte[] bytes=Base64.decode(photo(proof),Base64.DEFAULT);CloudPurchase.submitProof(token(),uid(),id,number,bytes);return null;},v->{
+                        pendingPaymentProof=null;paymentProofRequestId=null;status.setText("Payment proof sent to Admin for approval.");home();
+                    });
+                });
+            }
         }
-        button("Pay ₹100 with UPI",()->{Uri pay=Uri.parse("upi://pay").buildUpon().appendQueryParameter("pa",CloudConfig.UPI_ID).appendQueryParameter("pn","Privacy Chat").appendQueryParameter("am","100.00").appendQueryParameter("cu","INR").build();try{startActivity(new Intent(Intent.ACTION_VIEW,pay));}catch(Exception ex){status.setText("Use the displayed UPI ID in your payment app.");}});
-        EditText ref=field("UPI transaction reference",1);
-        button("Submit for verification",()->{String reference=ref.getText().toString().trim();if(reference.length()<8||reference.length()>80){status.setText("Enter the UPI transaction reference (8–80 characters).");return;}task(()->{CloudPurchase.submit(token(),uid(),reference);return null;},v->home());});
         button("My account",this::account);button("Refresh access",this::home);button("Lock",this::lock);
     }
     private void account(){
