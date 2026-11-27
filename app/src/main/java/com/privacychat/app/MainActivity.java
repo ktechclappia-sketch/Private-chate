@@ -163,7 +163,7 @@ public class MainActivity extends Activity {
         });
     }
     private void home(){
-        page("Privacy Chat");button("Lock",this::lock);button("Refresh",this::home);
+        page("Privacy Chat");button("Lock",this::lock);button("Refresh",this::home);button("My account",this::account);
         call("access",v->{JSONObject a=(JSONObject)v;accessState=accessState(a);scheduleAccessCheck();
             if(!a.optBoolean("enabled",true)){
                 pendingPhoto=null;photoRoom=null;page("Account deactivated");
@@ -257,10 +257,53 @@ public class MainActivity extends Activity {
     private static String displayValue(JSONObject o,String key){return o.isNull(key)?"—":o.optString(key);}
     private void subscription(JSONObject a){
         page("Privacy Chat · ₹100 per month");label("Start: "+displayValue(a,"start")+"   End: "+displayValue(a,"end"));label("Last payment: "+displayValue(a,"payment"));label(CloudConfig.UPI_ID);
+        if("pending".equalsIgnoreCase(a.optString("payment"))){
+            label("Payment is pending admin approval. Do not submit it again.");
+            button("My account",this::account);button("Refresh access",this::home);button("Lock",this::lock);return;
+        }
         button("Pay ₹100 with UPI",()->{Uri pay=Uri.parse("upi://pay").buildUpon().appendQueryParameter("pa",CloudConfig.UPI_ID).appendQueryParameter("pn","Privacy Chat").appendQueryParameter("am","100.00").appendQueryParameter("cu","INR").build();try{startActivity(new Intent(Intent.ACTION_VIEW,pay));}catch(Exception ex){status.setText("Use the displayed UPI ID in your payment app.");}});
         EditText ref=field("UPI transaction reference",1);
         button("Submit for verification",()->{String reference=ref.getText().toString().trim();if(reference.length()<8||reference.length()>80){status.setText("Enter the UPI transaction reference (8–80 characters).");return;}task(()->{CloudPurchase.submit(token(),uid(),reference);return null;},v->home());});
-        button("Refresh access",this::home);button("Lock",this::lock);
+        button("My account",this::account);button("Refresh access",this::home);button("Lock",this::lock);
+    }
+    private void account(){
+        page("My account");button("Dashboard",this::home);button("Lock",this::lock);
+        call("access",value->{
+            JSONObject a=(JSONObject)value;
+            task(()->{
+                JSONObject data=new JSONObject();String bearer=token();
+                try{String q="/rest/v1/privacy_payments?select=amount_paise,upi_reference,status,created_at&user_id=eq."+Uri.encode(uid())+"&order=created_at.desc&limit=20";data.put("payments",new JSONArray(CloudPurchase.request(q,bearer,null)));}
+                catch(Exception e){data.put("payments_error",e.getMessage()==null?"Unavailable":e.getMessage());}
+                try{data.put("devices",new JSONArray(CloudPurchase.request("/rest/v1/rpc/privacy_chat_list_devices",bearer,new JSONObject())));}
+                catch(Exception e){data.put("devices_error",e.getMessage()==null?"Unavailable":e.getMessage());}
+                return data;
+            },data->renderAccount(a,(JSONObject)data));
+        });
+    }
+    private void renderAccount(JSONObject a,JSONObject data)throws Exception{
+        page("My account");button("Dashboard",this::home);button("Lock",this::lock);
+        String email=session.optJSONObject("user").optString("email","—");
+        label("Verified account: "+email);
+        String state=!a.optBoolean("enabled",true)?"Deactivated":a.optBoolean("active")?(a.optBoolean("admin")?"Admin access":a.optBoolean("free_testing")?"Free testing":"Active"):"Inactive / expired";
+        label("Access: "+state);label("Plan: ₹100 per month");
+        label("Subscription start: "+displayValue(a,"start"));label("Subscription end: "+displayValue(a,"end"));
+        label("Latest payment: "+displayValue(a,"payment"));
+        button("Subscription / renew",()->subscription(a));button("Support / help",this::support);
+        label("Payment history");
+        JSONArray payments=data.optJSONArray("payments");
+        if(payments==null)label("Payment history unavailable: "+data.optString("payments_error","Please refresh."));
+        else if(payments.length()==0)label("No payments submitted.");
+        else for(int i=0;i<payments.length();i++){JSONObject p=payments.getJSONObject(i);long paise=p.optLong("amount_paise",10000);label("₹"+(paise/100)+" · "+p.optString("status")+" · "+p.optString("created_at")+" · "+p.optString("upi_reference"));}
+        label("My devices");
+        JSONArray devices=data.optJSONArray("devices");
+        if(devices==null)label("Device list unavailable: "+data.optString("devices_error","Please refresh."));
+        else if(devices.length()==0)label("No registered devices.");
+        else for(int i=0;i<devices.length();i++){JSONObject d=devices.getJSONObject(i);label(d.optString("device_name","Android device")+" · "+d.optString("platform","Android")+" · Last active "+d.optString("last_seen_at","—"));}
+    }
+    private void support(){
+        page("Support / help");button("My account",this::account);button("Lock",this::lock);
+        label("For sign-in, subscription, or payment approval help, contact your KTech administrator.");
+        label("Never share your account password or secret chat password.");
     }
     private void reviews(){
         page("UPI payment review");button("Dashboard",this::home);
