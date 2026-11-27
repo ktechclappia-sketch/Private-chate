@@ -266,7 +266,10 @@ public class MainActivity extends Activity {
         page("Privacy Chat · ₹100 per month");
         label("Start: "+displayValue(a,"start")+"   End: "+displayValue(a,"end"));
         label("Plan: ₹100 per month · UPI: "+CloudConfig.UPI_ID);
-        if(requests.length()==0){\n            if("pending".equalsIgnoreCase(a.optString("payment")))label("Your previous payment is pending Admin approval. Do not submit it again.");\n            else label("No payment request has been sent by Admin yet. Please wait for an in-app request.");\n        }
+        if(requests.length()==0){
+            if("pending".equalsIgnoreCase(a.optString("payment")))label("Your previous payment is pending Admin approval. Do not submit it again.");
+            else label("No payment request has been sent by Admin yet. Please wait for an in-app request.");
+        }
         for(int i=0;i<requests.length();i++){
             JSONObject r=requests.getJSONObject(i);String id=r.optString("id"),state=r.optString("status","requested");
             label("Admin payment request · "+state.toUpperCase());
