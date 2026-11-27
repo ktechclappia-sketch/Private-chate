@@ -41,6 +41,7 @@ input,select{width:100%;border:1px solid #cebec8;border-radius:7px;padding:9px 1
 nav{display:flex;gap:4px;margin:18px 0 12px;flex-wrap:wrap}
 nav button{background:transparent;border-color:transparent}
 nav button[aria-current=page]{background:#49243a;color:#fff}
+.nav-count{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 6px;border-radius:12px;background:#f4e7ee;color:#7b3157;font-size:12px;font-weight:750}
 .section-head{justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .filters{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 15px}
 .filters label:first-child{flex:1 1 180px}
