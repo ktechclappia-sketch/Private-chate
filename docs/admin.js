@@ -8,8 +8,8 @@ const dateFormat = new Intl.DateTimeFormat('en-IN', {day:'2-digit', month:'short
 const monthFormat = new Intl.DateTimeFormat('en-IN', {month:'long', year:'numeric', timeZone:'Asia/Kolkata'});
 const timeFormat = new Intl.DateTimeFormat('en-IN', {hour:'2-digit', minute:'2-digit', timeZone:'Asia/Kolkata'});
 const views = ['users','requests','payments','collections'];
-let session = null, report = null, busy = false, generation = 0, currentView = 'users';
-let decision = null;
+let session = null, report = null, paymentRequests = [], busy = false, generation = 0, currentView = 'users';
+let decision = null, requestTarget = null;
 const status = message => { byId('status').textContent = message; };
 const amount = paise => money.format(Number(paise)/100);
 const date = value => value && Number.isFinite(Date.parse(value)) ? dateFormat.format(new Date(value)) : '—';
@@ -53,6 +53,9 @@ function table(target, headers, rows, empty, compact=false) {
 function clear() {
   generation++; session=null; report=null; decision=null;
   if (byId('confirm').open) byId('confirm').close();
+  if (byId('request-dialog').open) byId('request-dialog').close();
+  if (byId('proof-dialog').open) byId('proof-dialog').close();
+  byId('request-reason').value='';byId('proof-image').removeAttribute('src');requestTarget=null;paymentRequests=[];
   for (const id of ['metrics','user-list','payment-list','pending-list','monthly-list']) byId(id).replaceChildren();
   for (const id of ['updated','user-count','pending-count','nav-pending-count','status']) byId(id).textContent='';
   for (const id of ['password','user-filter','user-search','payment-filter','payment-search']) byId(id).value='';
@@ -92,11 +95,15 @@ async function token(expected) {
   return session.access_token;
 }
 async function load(expected) {
-  const fresh=await api('/rest/v1/rpc/privacy_admin_report',{},await token(expected));
+  const bearer=await token(expected);
+  const [fresh,requests]=await Promise.all([
+    api('/rest/v1/rpc/privacy_admin_report',{},bearer),
+    api('/rest/v1/rpc/privacy_payment_request_action',{op:'admin_pending',args:{}},bearer)
+  ]);
   if(expected!==generation) return;
-  if(!fresh || !fresh.summary || !Array.isArray(fresh.users) || !Array.isArray(fresh.payments) || !Array.isArray(fresh.monthly))
+  if(!fresh || !fresh.summary || !Array.isArray(fresh.users) || !Array.isArray(fresh.payments) || !Array.isArray(fresh.monthly) || !Array.isArray(requests))
     throw new Error('The server returned an incomplete admin report.');
-  report=fresh;
+  report=fresh;paymentRequests=requests;
   renderMetrics();renderUsers();renderRequests();renderPayments();renderMonthly();
   byId('updated').textContent='Updated '+timeFormat.format(new Date())+' IST';
   byId('login').hidden=true;byId('panel').hidden=false;byId('tools').hidden=false;
@@ -128,6 +135,18 @@ function ask(op,args,title,detail,label) {
   byId('confirm').returnValue='cancel';byId('confirm').showModal();
   byId('confirm').querySelector('[value="cancel"]').focus();
 }
+byId('request-dialog').addEventListener('close',()=>{
+  const target=requestTarget;requestTarget=null;
+  if(!target || byId('request-dialog').returnValue!=='send')return;
+  const reason=byId('request-reason').value.trim();
+  if(reason.length<5){status('Enter a reason of at least 5 characters.');return;}
+  run(async expected=>{
+    await api('/rest/v1/rpc/privacy_payment_request_action',{op:'create_request',args:{user_id:target.userId,reason}},await token(expected));
+    if(expected!==generation)return;
+    status('Payment request sent to '+target.email+'. It will appear in the customer app.');
+    await load(expected);
+  });
+});
 byId('confirm').addEventListener('close',()=>{
   const d=decision;decision=null;
   if (!d || byId('confirm').returnValue!=='confirm') return;
@@ -140,6 +159,14 @@ byId('confirm').addEventListener('close',()=>{
     if(expected===generation)status('Change saved.');
   });
 });
+function openPaymentRequest(userId,email) {
+  requestTarget={userId,email};
+  byId('request-customer').textContent='Customer: '+email+' · Plan: ₹100 / month';
+  byId('request-reason').value='';
+  byId('request-dialog').returnValue='cancel';
+  byId('request-dialog').showModal();
+  byId('request-reason').focus();
+}
 function renderUsers() {
   if(!report)return;
   const query=lower(byId('user-search').value.trim()), filter=byId('user-filter').value;
@@ -151,6 +178,7 @@ function renderUsers() {
     else {
       const freeLabel=u.free_testing?'Remove free access':'Grant free access';
       const stateLabel=u.enabled?'Deactivate':'Activate';
+      if(u.enabled) actions.append(action('Request payment',()=>openPaymentRequest(u.id,u.email)));
       actions.append(action(freeLabel,()=>ask('set_free_testing',{user_id:u.id,value:!u.free_testing},freeLabel+'?',u.email,freeLabel)),
         action(stateLabel,()=>ask('set_user_enabled',{user_id:u.id,value:!u.enabled},stateLabel+' user?',u.email,stateLabel)));
     }
@@ -158,16 +186,29 @@ function renderUsers() {
   });
   table('user-list',['Email','Status','Subscription start','Subscription end','Access controls'],rows,'No matching registered users.');
 }
+function viewProof(path) {
+  const safe=String(path||'');
+  if(!/^[0-9a-f-]{36}\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.jpg$/i.test(safe)){status('Screenshot unavailable for this payment.');return;}
+  run(async expected=>{
+    const encoded=safe.split('/').map(encodeURIComponent).join('/');
+    const result=await api('/storage/v1/object/sign/privacy-payment-proofs/'+encoded,{expiresIn:120},await token(expected));
+    if(expected!==generation)return;
+    const url=result.signedURL||'';
+    if(!url)throw new Error('Could not load the private screenshot.');
+    byId('proof-image').src=url.startsWith('http')?url:base+url;
+    byId('proof-dialog').showModal();
+  });
+}
 function renderRequests() {
   if(!report)return;
-  const pending=report.payments.filter(p=>lower(p.status)==='pending');
-  byId('pending-count').textContent=pending.length+' awaiting approval';
-  byId('nav-pending-count').textContent=String(pending.length);
-  table('pending-list',['Email','UPI reference','Amount','Submitted','Review'],pending.map(p=>{
+  byId('pending-count').textContent=paymentRequests.length+' awaiting approval';
+  byId('nav-pending-count').textContent=String(paymentRequests.length);
+  table('pending-list',['Email','Reason','UTR','Amount','Submitted','Proof','Review'],paymentRequests.map(p=>{
     const actions=element('div',undefined,'actions');
-    actions.append(action('Approve',()=>ask('approve',{id:p.id},'Approve payment?',p.email+' · '+amount(p.amount)+' · '+p.reference+'. Confirm the credit in your bank account before approving. Approval activates this subscription.','Approve')),
-      action('Reject',()=>ask('reject',{id:p.id},'Reject payment?',p.email+' · '+p.reference,'Reject')));
-    return [p.email,p.reference,amount(p.amount),date(p.date),actions];
+    actions.append(action('Approve',()=>ask('approve',{id:p.id},'Approve payment?',p.email+' · ₹100 · UTR '+(p.utr_number||p.reference)+'. Confirm bank credit before approving. Approval activates this subscription.','Approve')),
+      action('Reject',()=>ask('reject',{id:p.id},'Reject payment?',p.email+' · UTR '+(p.utr_number||p.reference),'Reject')));
+    const proof=p.screenshot_path?action('View screenshot',()=>viewProof(p.screenshot_path)):element('span','Not attached','table-label');
+    return [p.email,p.request_reason||'Legacy payment',p.utr_number||p.reference,amount(p.amount),date(p.date),proof,actions];
   }),'No pending payment requests.');
 }
 function renderPayments() {
