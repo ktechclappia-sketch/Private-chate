@@ -141,7 +141,15 @@ byId('request-dialog').addEventListener('close',()=>{
   const reason=byId('request-reason').value.trim();
   if(reason.length<5){status('Enter a reason of at least 5 characters.');return;}
   run(async expected=>{
-    await api('/rest/v1/rpc/privacy_payment_request_action',{op:'create_request',args:{user_id:target.userId,reason}},await token(expected));
+    try {
+      await api('/rest/v1/rpc/privacy_payment_request_action',{op:'create_request',args:{user_id:target.userId,reason}},await token(expected));
+    } catch(e) {
+      if(/duplicate key value violates unique constraint|already open/i.test(e.message)) {
+        status('This customer already has an unpaid payment request.');
+        await load(expected);return;
+      }
+      throw e;
+    }
     if(expected!==generation)return;
     status('Payment request sent to '+target.email+'. It will appear in the customer app.');
     await load(expected);
