@@ -7,7 +7,7 @@ const money = new Intl.NumberFormat('en-IN', {style:'currency', currency:'INR', 
 const dateFormat = new Intl.DateTimeFormat('en-IN', {day:'2-digit', month:'short', year:'numeric', timeZone:'Asia/Kolkata'});
 const monthFormat = new Intl.DateTimeFormat('en-IN', {month:'long', year:'numeric', timeZone:'Asia/Kolkata'});
 const timeFormat = new Intl.DateTimeFormat('en-IN', {hour:'2-digit', minute:'2-digit', timeZone:'Asia/Kolkata'});
-const views = ['users','payments','collections'];
+const views = ['users','requests','payments','collections'];
 let session = null, report = null, busy = false, generation = 0, currentView = 'users';
 let decision = null;
 const status = message => { byId('status').textContent = message; };
@@ -54,7 +54,7 @@ function clear() {
   generation++; session=null; report=null; decision=null;
   if (byId('confirm').open) byId('confirm').close();
   for (const id of ['metrics','user-list','payment-list','pending-list','monthly-list']) byId(id).replaceChildren();
-  for (const id of ['updated','user-count','pending-count','status']) byId(id).textContent='';
+  for (const id of ['updated','user-count','pending-count','nav-pending-count','status']) byId(id).textContent='';
   for (const id of ['password','user-filter','user-search','payment-filter','payment-search']) byId(id).value='';
   byId('panel').hidden=true; byId('tools').hidden=true; byId('login').hidden=false;
   selectView('users');
@@ -97,7 +97,7 @@ async function load(expected) {
   if(!fresh || !fresh.summary || !Array.isArray(fresh.users) || !Array.isArray(fresh.payments) || !Array.isArray(fresh.monthly))
     throw new Error('The server returned an incomplete admin report.');
   report=fresh;
-  renderMetrics();renderUsers();renderPayments();renderMonthly();
+  renderMetrics();renderUsers();renderRequests();renderPayments();renderMonthly();
   byId('updated').textContent='Updated '+timeFormat.format(new Date())+' IST';
   byId('login').hidden=true;byId('panel').hidden=false;byId('tools').hidden=false;
   selectView(currentView);
@@ -158,16 +158,20 @@ function renderUsers() {
   });
   table('user-list',['Email','Status','Subscription start','Subscription end','Access controls'],rows,'No matching registered users.');
 }
-function renderPayments() {
+function renderRequests() {
   if(!report)return;
   const pending=report.payments.filter(p=>lower(p.status)==='pending');
-  byId('pending-count').textContent=pending.length+' pending';
-  table('pending-list',['Email','Reference','Amount','Submitted','Review'],pending.map(p=>{
+  byId('pending-count').textContent=pending.length+' awaiting approval';
+  byId('nav-pending-count').textContent=String(pending.length);
+  table('pending-list',['Email','UPI reference','Amount','Submitted','Review'],pending.map(p=>{
     const actions=element('div',undefined,'actions');
-    actions.append(action('Approve',()=>ask('approve',{id:p.id},'Approve payment?',p.email+' · '+amount(p.amount)+' · '+p.reference+'. Confirm the credit in your bank account before approving.','Approve')),
+    actions.append(action('Approve',()=>ask('approve',{id:p.id},'Approve payment?',p.email+' · '+amount(p.amount)+' · '+p.reference+'. Confirm the credit in your bank account before approving. Approval activates this subscription.','Approve')),
       action('Reject',()=>ask('reject',{id:p.id},'Reject payment?',p.email+' · '+p.reference,'Reject')));
     return [p.email,p.reference,amount(p.amount),date(p.date),actions];
-  }),'No pending payments.');
+  }),'No pending payment requests.');
+}
+function renderPayments() {
+  if(!report)return;
   const query=lower(byId('payment-search').value.trim()), filter=byId('payment-filter').value;
   const matches=report.payments.filter(p=>(!filter||lower(p.status)===filter) && (lower(p.email).includes(query)||lower(p.reference).includes(query)));
   table('payment-list',['Email','Reference','Amount','Status','Submitted','Reviewed'],matches.map(p=>
