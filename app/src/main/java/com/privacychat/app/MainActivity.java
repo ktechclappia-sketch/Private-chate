@@ -182,6 +182,17 @@ public class MainActivity extends Activity {
                 for(int i=0;i<list.length();i++){JSONObject row=list.getJSONObject(i);String id=row.getString("room"),title=row.getString("title");
                     if(row.getBoolean("accepted"))button(title,()->thread(row,null));else{
                         label("Invitation · "+title);button("Accept",()->call("accept",z->home(),"room",id));button("Decline",()->call("decline",z->home(),"room",id));}}
+                if(!a.optBoolean("admin"))task(()->CloudPurchase.paymentRequests(token()),value->{
+                    JSONArray requests=(JSONArray)value;
+                    for(int i=0;i<requests.length();i++){
+                        JSONObject request=requests.getJSONObject(i);String state=request.optString("status");
+                        if("requested".equalsIgnoreCase(state)||"rejected".equalsIgnoreCase(state)){
+                            label("Admin payment request · ₹100 · "+request.optString("reason"));
+                            if("rejected".equalsIgnoreCase(state))label("Review note: "+request.optString("admin_note","Please resubmit proof."));
+                            button("Submit payment proof",()->subscription(a));
+                        }else if("pending".equalsIgnoreCase(state))label("Payment proof submitted · waiting for Admin approval.");
+                    }
+                });
             });
         });
     }
