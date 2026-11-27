@@ -33,7 +33,12 @@ android {
   }
  }
  buildTypes {
+  getByName('debug') {
+   applicationIdSuffix '.test'
+   manifestPlaceholders = [appLabel: 'Privacy Chat Test']
+  }
   getByName('release') {
+   manifestPlaceholders = [appLabel: 'Privacy Chat']
    if (hasReleaseSigning) signingConfig signingConfigs.getByName('release')
   }
  }
