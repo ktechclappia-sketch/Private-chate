@@ -292,7 +292,7 @@ public class MainActivity extends Activity {
             }else{
                 if("rejected".equalsIgnoreCase(state))label("Payment was rejected. Review the note: "+r.optString("admin_note","Please resubmit the correct proof."));
                 button("Pay ₹100 with UPI",()->{Uri pay=Uri.parse("upi://pay").buildUpon().appendQueryParameter("pa",CloudConfig.UPI_ID).appendQueryParameter("pn","Privacy Chat").appendQueryParameter("am","100.00").appendQueryParameter("cu","INR").build();try{startActivity(new Intent(Intent.ACTION_VIEW,pay));}catch(Exception ex){status.setText("Use the displayed UPI ID in your payment app.");}});
-                EditText utr=field("UTR / transaction number",33);
+                EditText utr=field("UTR / transaction number",1);
                 button(pendingPaymentProof!=null&&id.equals(paymentProofRequestId)?"Screenshot attached · choose another":"Attach payment screenshot",()->{
                     paymentProofRequestId=id;Intent pick=new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE);
                     try{startActivityForResult(pick,18);}catch(Exception ex){error(ex);}
