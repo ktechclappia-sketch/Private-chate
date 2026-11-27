@@ -60,7 +60,7 @@ jobs:
           name: Privacy-Chat-Android-Artifacts
           path: |
             app/build/outputs/apk/debug/app-debug.apk
-            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/apk/release/*.apk
             app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 30
