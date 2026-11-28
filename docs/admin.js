@@ -10,6 +10,9 @@ const timeFormat = new Intl.DateTimeFormat('en-IN', {hour:'2-digit', minute:'2-d
 const views = ['users','requests','payments','collections'];
 let session = null, report = null, paymentRequests = [], busy = false, generation = 0, currentView = 'users';
 let decision = null, requestTarget = null;
+const ADMIN_SESSION_KEY = 'privacyChatAdminSession';
+const ADMIN_ACTIVITY_KEY = 'privacyChatAdminLastActivity';
+const ADMIN_IDLE_LIMIT = 5 * 60 * 60 * 1000;
 const status = message => { byId('status').textContent = message; };
 const amount = paise => money.format(Number(paise)/100);
 const date = value => value && Number.isFinite(Date.parse(value)) ? dateFormat.format(new Date(value)) : '—';
@@ -50,8 +53,51 @@ function table(target, headers, rows, empty, compact=false) {
   }
   container.append(grid);
 }
+function persistSession() {
+  if (!session) return;
+  try { sessionStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session)); } catch {}
+}
+function expireSession() {
+  const bearer=session?.access_token;
+  clear();
+  status('Signed out after 5 hours of inactivity.');
+  if (bearer) api('/auth/v1/logout?scope=local',{},bearer).catch(()=>{});
+}
+function recordActivity() {
+  if (!session) return;
+  const now=Date.now();
+  try {
+    const last=Number(sessionStorage.getItem(ADMIN_ACTIVITY_KEY));
+    if (!last || now-last>=ADMIN_IDLE_LIMIT) { expireSession(); return; }
+    sessionStorage.setItem(ADMIN_ACTIVITY_KEY,String(now));
+  } catch {}
+}
+function checkIdle() {
+  if (!session) return;
+  try {
+    const last=Number(sessionStorage.getItem(ADMIN_ACTIVITY_KEY));
+    if (!last || Date.now()-last>=ADMIN_IDLE_LIMIT) expireSession();
+  } catch { expireSession(); }
+}
+function restoreSession() {
+  let saved, last;
+  try {
+    const raw=sessionStorage.getItem(ADMIN_SESSION_KEY);
+    if (!raw) return;
+    saved=JSON.parse(raw);
+    last=Number(sessionStorage.getItem(ADMIN_ACTIVITY_KEY));
+  } catch { clear(); return; }
+  if (!saved?.access_token || !saved?.refresh_token || !Number.isFinite(last)) { clear(); return; }
+  session=saved;
+  if (Date.now()-last>=ADMIN_IDLE_LIMIT) { expireSession(); return; }
+  run(async expected=>{
+    await load(expected);
+    if (expected===generation) status('');
+  });
+}
 function clear() {
   generation++; session=null; report=null; decision=null;
+  try { sessionStorage.removeItem(ADMIN_SESSION_KEY); sessionStorage.removeItem(ADMIN_ACTIVITY_KEY); } catch {}
   if (byId('confirm').open) byId('confirm').close();
   if (byId('request-dialog').open) byId('request-dialog').close();
   if (byId('proof-dialog').open) byId('proof-dialog').close();
@@ -90,6 +136,7 @@ async function token(expected) {
       const fresh=await api('/auth/v1/token?grant_type=refresh_token',{refresh_token:session.refresh_token});
       if(expected!==generation) throw new Error('Session ended.');
       session=fresh;
+      persistSession();
     } catch(e) { if(expected===generation && [400,401,403].includes(e.httpStatus)) clear(); throw e; }
   }
   return session.access_token;
@@ -241,7 +288,7 @@ byId('form').addEventListener('submit',event=>{
       const fresh=await api('/auth/v1/token?grant_type=password',{email:byId('email').value.trim(),password:byId('password').value});
       if(expected!==generation)return;
       if(!fresh?.access_token)throw new Error('Sign in failed.');
-      session=fresh;await load(expected);if(expected===generation)status('');
+      session=fresh;persistSession();sessionStorage.setItem(ADMIN_ACTIVITY_KEY,String(Date.now()));await load(expected);if(expected===generation)status('');
     } catch(e) {if(expected===generation)clear();throw e;}
     finally {byId('password').value='';}
   });
@@ -255,4 +302,11 @@ byId('logout').addEventListener('click',()=>run(async()=>{
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>selectView(b.dataset.view)));
 byId('user-search').addEventListener('input',renderUsers);byId('user-filter').addEventListener('change',renderUsers);
 byId('payment-search').addEventListener('input',renderPayments);byId('payment-filter').addEventListener('change',renderPayments);
-window.addEventListener('pagehide',clear);
+for (const eventName of ['pointerdown','keydown','touchstart','scroll']) {
+  window.addEventListener(eventName,recordActivity,{passive:true});
+}
+window.addEventListener('focus',checkIdle);
+window.addEventListener('pageshow',checkIdle);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkIdle();});
+window.setInterval(checkIdle,30000);
+restoreSession();
