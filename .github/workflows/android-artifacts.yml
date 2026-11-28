@@ -7,6 +7,7 @@ on:
       - "*.gradle"
       - "gradle.properties"
       - ".github/workflows/android-artifacts.yml"
+      - ".github/scripts/android-smoke.sh"
   push:
     branches: [privacy-chat-full-development]
     paths:
@@ -14,6 +15,7 @@ on:
       - "*.gradle"
       - "gradle.properties"
       - ".github/workflows/android-artifacts.yml"
+      - ".github/scripts/android-smoke.sh"
   workflow_dispatch:
 permissions:
   contents: read
@@ -71,3 +73,34 @@ jobs:
             app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 30
+  emulator-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [29, 35, 36]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - run: gradle :app:assembleDebug :app:assembleDebugAndroidTest
+      - name: Enable emulator acceleration
+        run: sudo chmod 666 /dev/kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          script: bash .github/scripts/android-smoke.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Privacy-Chat-Android-Smoke-API-${{ matrix.api-level }}
+          path: smoke.log

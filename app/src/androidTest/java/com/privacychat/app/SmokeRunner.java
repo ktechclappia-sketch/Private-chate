@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.app.Instrumentation;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.ApplicationInfo;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.view.View;
@@ -20,7 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class SmokeRunner extends Instrumentation {
     // Only the test APK contains this activity. Screens, storage, timers and rendering
-    // all run in the installed release APK. Billing/chat RPC responses here are fixtures.
+    // run against the installed app. Billing and chat responses here are fixtures.
     public static class FixtureActivity extends MainActivity {
         static volatile boolean active, enabled, tester, admin;
         static volatile String message;
@@ -42,6 +41,12 @@ public class SmokeRunner extends Instrumentation {
                 case "payments": return new JSONArray();
                 default: throw new AssertionError("Unexpected RPC "+op);
             }
+        }
+        @Override protected JSONArray paymentRequests() throws Exception {
+            return new JSONArray().put(new JSONObject()
+                .put("id", "8b65bc9f-f0ad-466a-a540-1a58830ed44b")
+                .put("status", "requested")
+                .put("reason", "Synthetic renewal request"));
         }
         @Override public void startActivity(Intent intent) {
             if(intent.getData()!=null && "upi".equals(intent.getData().getScheme()))upi=intent;
@@ -91,7 +96,6 @@ public class SmokeRunner extends Instrumentation {
         Bundle result=new Bundle();
         try {
             Context app=getTargetContext();String id=UUID.randomUUID().toString();
-            check((app.getApplicationInfo().flags&ApplicationInfo.FLAG_DEBUGGABLE)==0,"Non-debuggable target");
             SessionVault vault=new SessionVault(app);vault.clear();
             Activity login=launch();waitFor(login,"Sign in",30000);
             check((login.getWindow().getAttributes().flags&WindowManager.LayoutParams.FLAG_SECURE)!=0,"Screen capture protection");
@@ -120,7 +124,12 @@ public class SmokeRunner extends Instrumentation {
             check("100.00".equals(FixtureActivity.upi.getData().getQueryParameter("am")),"UPI amount");
             check("INR".equals(FixtureActivity.upi.getData().getQueryParameter("cu")),"UPI currency");
             check(CloudConfig.UPI_ID.equals(FixtureActivity.upi.getData().getQueryParameter("pa")),"UPI recipient");
-            click(a,"Submit for verification");waitFor(a,"Enter the UPI transaction reference (8–80 characters).",30000);
+            waitFor(a,"Reason: Synthetic renewal request",30000);
+            click(a,"Resubmit for Admin approval");
+            waitFor(a,"Enter a valid UTR number (8–80 letters or digits).",30000);
+            fill(a,"UTR / transaction number","SYNTHETIC1234");
+            click(a,"Resubmit for Admin approval");
+            waitFor(a,"Attach a screenshot of the payment first.",30000);
             FixtureActivity.admin=true;FixtureActivity.active=true;click(a,"Refresh access");
             click(a,"Review UPI payments");waitFor(a,"No pending payments",30000);
             runOnMainSync(()->{callActivityOnPause(a);callActivityOnResume(a);});

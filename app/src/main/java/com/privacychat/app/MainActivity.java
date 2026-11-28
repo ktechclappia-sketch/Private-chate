@@ -81,7 +81,7 @@ public class MainActivity extends Activity {
     private static JSONObject args(Object... pairs)throws JSONException{JSONObject o=new JSONObject();for(int i=0;i<pairs.length;i+=2)o.put((String)pairs[i],pairs[i+1]);return o;}
     private String uid(){return session.optJSONObject("user").optString("id");}
     private void login(){
-        owner=false;page("private chate");EditText email=field("Email",33),password=field("Account password",129);
+        owner=false;unlocked=false;page("private chate");EditText email=field("Email",33),password=field("Account password",129);
         button("Sign in",()->authenticate(email,password,false));button("Create account",()->authenticate(email,password,true));
     }
     private void authenticate(EditText email,EditText password,boolean signup){
@@ -112,7 +112,13 @@ public class MainActivity extends Activity {
         if(!accessToken.isEmpty())queue.execute(()->{try{
             CloudPurchase.request("/auth/v1/logout?scope=local",accessToken,new JSONObject());
         }catch(Exception ignored){ /* The device session was already cleared. */ }});
-        cancelAccessChecks();pendingPhoto=null;photoRoom=null;timer.removeCallbacks(lockTimer);login();
+        clearAttachments();cancelAccessChecks();timer.removeCallbacks(lockTimer);login();
+    }
+    private void clearAttachments(){
+        pendingPhoto=null;
+        photoRoom=null;
+        pendingPaymentProof=null;
+        paymentProofRequestId=null;
     }
     private void lock(){
         owner=false;unlocked=false;cancelAccessChecks();timer.removeCallbacks(lockTimer);if(session==null){login();return;}
@@ -127,7 +133,7 @@ public class MainActivity extends Activity {
                 if(secrets.retryDelay()>0){status.setText("Try again in 30 seconds.");return;}
                 char[] x=p.getText().toString().toCharArray();p.setText("");
                 task(()->secrets.unlock(x),v->{int mode=(Integer)v;if(mode==0){status.setText("Incorrect password");return;}
-                    if(mode==1){owner=true;unlocked=true;armTimer();home();}else{owner=false;unlocked=true;armTimer();pendingPhoto=null;photoRoom=null;page("private chate");label("No conversations");button("Lock",this::lock);}});
+                    if(mode==1){owner=true;unlocked=true;armTimer();home();}else{owner=false;unlocked=true;armTimer();clearAttachments();page("private chate");label("No conversations");button("Lock",this::lock);button("Sign out",this::logout);}});
             });
         }
         button("Sign out",this::logout);
@@ -168,7 +174,7 @@ public class MainActivity extends Activity {
         page("private chate");button("Lock",this::lock);button("Refresh",this::home);button("My account",this::account);
         call("access",v->{JSONObject a=(JSONObject)v;accessState=accessState(a);scheduleAccessCheck();
             if(!a.optBoolean("enabled",true)){
-                pendingPhoto=null;photoRoom=null;page("Account deactivated");
+                clearAttachments();page("Account deactivated");
                 label("Contact the private chate admin to restore access.");button("Refresh access",this::home);button("Lock",this::lock);return;
             }
             if(!a.getBoolean("active")){subscription(a);return;}
@@ -182,7 +188,7 @@ public class MainActivity extends Activity {
                 for(int i=0;i<list.length();i++){JSONObject row=list.getJSONObject(i);String id=row.getString("room"),title=row.getString("title");
                     if(row.getBoolean("accepted"))button(title,()->thread(row,null));else{
                         label("Invitation · "+title);button("Accept",()->call("accept",z->home(),"room",id));button("Decline",()->call("decline",z->home(),"room",id));}}
-                if(!a.optBoolean("admin"))task(()->CloudPurchase.paymentRequests(token()),value->{
+                if(!a.optBoolean("admin"))task(this::paymentRequests,value->{
                     JSONArray requests=(JSONArray)value;
                     for(int i=0;i<requests.length();i++){
                         JSONObject request=requests.getJSONObject(i);String state=request.optString("status");
@@ -253,7 +259,7 @@ public class MainActivity extends Activity {
         if(room.optBoolean("owner")&&"group".equals(room.optString("kind"))){EditText e=field("Registered member email",33);button("Invite member",()->call("invite",v->members(room),"room",id,"email",e.getText().toString()));}
         call("members",v->{JSONArray list=(JSONArray)v;for(int i=0;i<list.length();i++){JSONObject m=list.getJSONObject(i);label(m.optString("email")+(m.optBoolean("accepted")?"":" · Invited"));if(m.optBoolean("removable"))button("Remove "+m.optString("email"),()->call("remove",z->members(room),"room",id,"person",m.optString("person")));}},"room",id);
     }
-    @Override protected void onActivityResult(int req,int result,Intent data){super.onActivityResult(req,result,data);if(result==RESULT_OK&&data!=null){if(req==17)pendingPhoto=data.getData();else if(req==18){pendingPaymentProof=data.getData();status.setText("Payment screenshot attached.");}}}
+    @Override protected void onActivityResult(int req,int result,Intent data){super.onActivityResult(req,result,data);if(result==RESULT_OK&&data!=null){if(req==17)pendingPhoto=data.getData();else if(req==18){pendingPaymentProof=data.getData();status.setText("Unlock and reopen the payment request to submit the attached screenshot.");}}}
     private String photo(Uri uri)throws Exception{
         BitmapFactory.Options opt=new BitmapFactory.Options();opt.inJustDecodeBounds=true;
         try(InputStream in=getContentResolver().openInputStream(uri)){BitmapFactory.decodeStream(in,null,opt);}
@@ -269,9 +275,12 @@ public class MainActivity extends Activity {
         button("Discard",()->{pendingPhoto=null;photoRoom=null;home();});
     }
     private static String displayValue(JSONObject o,String key){return o.isNull(key)?"—":o.optString(key);}
+    protected JSONArray paymentRequests() throws Exception {
+        return CloudPurchase.paymentRequests(token());
+    }
     private void subscription(JSONObject a){
         page("private chate · ₹100 per month");label("Loading payment requests…");
-        task(()->CloudPurchase.paymentRequests(token()),value->renderSubscription(a,(JSONArray)value));
+        task(this::paymentRequests,value->renderSubscription(a,(JSONArray)value));
     }
     private void renderSubscription(JSONObject a,JSONArray requests)throws Exception{
         page("private chate · ₹100 per month");
@@ -299,7 +308,7 @@ public class MainActivity extends Activity {
                 });
                 button("Resubmit for Admin approval",()->{
                     String number=utr.getText().toString().trim();Uri proof=pendingPaymentProof;
-                    if(number.length()<8||number.length()>80){status.setText("Enter the UTR number (8–80 characters).");return;}
+                    if(!number.matches("[A-Za-z0-9/-]{8,80}")){status.setText("Enter a valid UTR number (8–80 letters or digits).");return;}
                     if(proof==null||!id.equals(paymentProofRequestId)){status.setText("Attach a screenshot of the payment first.");return;}
                     task(()->{byte[] bytes=Base64.decode(photo(proof),Base64.DEFAULT);CloudPurchase.submitProof(token(),uid(),id,number,bytes);return null;},v->{
                         pendingPaymentProof=null;paymentProofRequestId=null;status.setText("Payment proof sent to Admin for approval.");home();
