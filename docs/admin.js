@@ -57,11 +57,21 @@ function persistSession() {
   if (!session) return;
   try { sessionStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session)); } catch {}
 }
+async function revokeSession(saved) {
+  if (!saved?.access_token) return;
+  let bearer=saved.access_token;
+  if (saved.refresh_token && saved.expires_at*1000 <= Date.now()) {
+    const fresh=await api('/auth/v1/token?grant_type=refresh_token',{refresh_token:saved.refresh_token});
+    if (!fresh?.access_token) throw new Error('The session could not be renewed for revocation.');
+    bearer=fresh.access_token;
+  }
+  await api('/auth/v1/logout?scope=local',{},bearer);
+}
 function expireSession() {
-  const bearer=session?.access_token;
+  const saved=session;
   clear();
   status('Signed out after 5 hours of inactivity.');
-  if (bearer) api('/auth/v1/logout?scope=local',{},bearer).catch(()=>{});
+  revokeSession(saved).catch(()=>{});
 }
 function recordActivity() {
   if (!session) return;
@@ -295,8 +305,8 @@ byId('form').addEventListener('submit',event=>{
 });
 byId('refresh').addEventListener('click',()=>run(async expected=>{await load(expected);if(expected===generation)status('Report refreshed.');}));
 byId('logout').addEventListener('click',()=>run(async()=>{
-  const bearer=session?.access_token; clear();
-  try { if(bearer)await api('/auth/v1/logout?scope=local',{},bearer); status('Signed out.'); }
+  const saved=session; clear();
+  try { await revokeSession(saved); status('Signed out.'); }
   catch { status('Signed out of this page. The server could not confirm session revocation.'); }
 }));
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>selectView(b.dataset.view)));
