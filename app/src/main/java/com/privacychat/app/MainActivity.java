@@ -81,7 +81,7 @@ public class MainActivity extends Activity {
     private static JSONObject args(Object... pairs)throws JSONException{JSONObject o=new JSONObject();for(int i=0;i<pairs.length;i+=2)o.put((String)pairs[i],pairs[i+1]);return o;}
     private String uid(){return session.optJSONObject("user").optString("id");}
     private void login(){
-        owner=false;page("Privacy Chat");EditText email=field("Email",33),password=field("Account password",129);
+        owner=false;page("private chate");EditText email=field("Email",33),password=field("Account password",129);
         button("Sign in",()->authenticate(email,password,false));button("Create account",()->authenticate(email,password,true));
     }
     private void authenticate(EditText email,EditText password,boolean signup){
@@ -122,12 +122,12 @@ public class MainActivity extends Activity {
             button("Save passwords",()->{char[] x=a.getText().toString().toCharArray(),y=b.getText().toString().toCharArray();a.setText("");b.setText("");
                 task(()->{secrets.configure(x,y);return null;},v->lock());});
         }else{
-            page("Privacy Chat");EditText p=field("Secret password",129);
+            page("private chate");EditText p=field("Secret password",129);
             button("Unlock",()->{
                 if(secrets.retryDelay()>0){status.setText("Try again in 30 seconds.");return;}
                 char[] x=p.getText().toString().toCharArray();p.setText("");
                 task(()->secrets.unlock(x),v->{int mode=(Integer)v;if(mode==0){status.setText("Incorrect password");return;}
-                    if(mode==1){owner=true;unlocked=true;armTimer();home();}else{owner=false;unlocked=true;armTimer();pendingPhoto=null;photoRoom=null;page("Privacy Chat");label("No conversations");button("Lock",this::lock);}});
+                    if(mode==1){owner=true;unlocked=true;armTimer();home();}else{owner=false;unlocked=true;armTimer();pendingPhoto=null;photoRoom=null;page("private chate");label("No conversations");button("Lock",this::lock);}});
             });
         }
         button("Sign out",this::logout);
@@ -165,11 +165,11 @@ public class MainActivity extends Activity {
         });
     }
     private void home(){
-        page("Privacy Chat");button("Lock",this::lock);button("Refresh",this::home);button("My account",this::account);
+        page("private chate");button("Lock",this::lock);button("Refresh",this::home);button("My account",this::account);
         call("access",v->{JSONObject a=(JSONObject)v;accessState=accessState(a);scheduleAccessCheck();
             if(!a.optBoolean("enabled",true)){
                 pendingPhoto=null;photoRoom=null;page("Account deactivated");
-                label("Contact the Privacy Chat admin to restore access.");button("Refresh access",this::home);button("Lock",this::lock);return;
+                label("Contact the private chate admin to restore access.");button("Refresh access",this::home);button("Lock",this::lock);return;
             }
             if(!a.getBoolean("active")){subscription(a);return;}
             if(pendingPhoto!=null&&photoRoom!=null){confirmPhoto();return;}
@@ -270,11 +270,11 @@ public class MainActivity extends Activity {
     }
     private static String displayValue(JSONObject o,String key){return o.isNull(key)?"—":o.optString(key);}
     private void subscription(JSONObject a){
-        page("Privacy Chat · ₹100 per month");label("Loading payment requests…");
+        page("private chate · ₹100 per month");label("Loading payment requests…");
         task(()->CloudPurchase.paymentRequests(token()),value->renderSubscription(a,(JSONArray)value));
     }
     private void renderSubscription(JSONObject a,JSONArray requests)throws Exception{
-        page("Privacy Chat · ₹100 per month");
+        page("private chate · ₹100 per month");
         label("Start: "+displayValue(a,"start")+"   End: "+displayValue(a,"end"));
         label("Plan: ₹100 per month · UPI: "+CloudConfig.UPI_ID);
         if(requests.length()==0){
@@ -291,7 +291,7 @@ public class MainActivity extends Activity {
                 label("Payment approved by Admin.");
             }else{
                 if("rejected".equalsIgnoreCase(state))label("Payment was rejected. Review the note: "+r.optString("admin_note","Please resubmit the correct proof."));
-                button("Pay ₹100 with UPI",()->{Uri pay=Uri.parse("upi://pay").buildUpon().appendQueryParameter("pa",CloudConfig.UPI_ID).appendQueryParameter("pn","Privacy Chat").appendQueryParameter("am","100.00").appendQueryParameter("cu","INR").build();try{startActivity(new Intent(Intent.ACTION_VIEW,pay));}catch(Exception ex){status.setText("Use the displayed UPI ID in your payment app.");}});
+                button("Pay ₹100 with UPI",()->{Uri pay=Uri.parse("upi://pay").buildUpon().appendQueryParameter("pa",CloudConfig.UPI_ID).appendQueryParameter("pn","private chate").appendQueryParameter("am","100.00").appendQueryParameter("cu","INR").build();try{startActivity(new Intent(Intent.ACTION_VIEW,pay));}catch(Exception ex){status.setText("Use the displayed UPI ID in your payment app.");}});
                 EditText utr=field("UTR / transaction number",1);
                 button(pendingPaymentProof!=null&&id.equals(paymentProofRequestId)?"Screenshot attached · choose another":"Attach payment screenshot",()->{
                     paymentProofRequestId=id;Intent pick=new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE);
