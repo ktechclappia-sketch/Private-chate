@@ -22,6 +22,7 @@ public class MainActivity extends Activity {
     private TextView status;
     private final ExecutorService queue = Executors.newSingleThreadExecutor();
     private final Handler timer = new Handler(android.os.Looper.getMainLooper());
+    static final String DEVICE_REGISTERED = "privacy_chat_device_registered";
     private SessionVault vault;
     private JSONObject session;
     private int screen;
@@ -47,7 +48,16 @@ public class MainActivity extends Activity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         vault = new SessionVault(this);
         try { session = vault.load(); } catch(Exception e) { login(); status.setText("Saved session unavailable. Sign in again."); return; }
-        if(session == null) login(); else lock();
+        if (session != null && !session.optBoolean(DEVICE_REGISTERED)) {
+            vault.clear();
+            session = null;
+            login();
+            status.setText("Sign in again to verify this device.");
+        } else if (session == null) {
+            login();
+        } else {
+            lock();
+        }
     }
     @Override protected void onResume(){super.onResume();foreground=true;}
     @Override protected void onPause(){foreground=false; if(session!=null) lock(); else {screen++;busy=false;} super.onPause();}
@@ -87,21 +97,34 @@ public class MainActivity extends Activity {
     private void authenticate(EditText email,EditText password,boolean signup){
         String address=email.getText().toString().trim(),pass=password.getText().toString();password.setText("");
         task(()->{
-            JSONObject result=signup?CloudAuth.signup(address,pass):CloudAuth.login(address,pass);
-            if(!signup&&result.has("refresh_token")){
-                try{DeviceRegistry.register(getApplicationContext(),result.getString("access_token"));}
-                catch(Exception ignored){/* Device registration must not block sign-in. */}
+            JSONObject result = authenticateAccount(address, pass, signup);
+            if (!result.optString("refresh_token").isEmpty()) {
+                try {
+                    registerDevice(result.getString("access_token"));
+                } catch (Exception cause) {
+                    throw new Exception("Device registration failed. Check your connection and sign in again.", cause);
+                }
+                result.put(DEVICE_REGISTERED, true);
             }
             return result;
         },value->{
-            JSONObject result=(JSONObject)value;if(!result.has("refresh_token")){status.setText("Open the confirmation email, then sign in.");return;}
+            JSONObject result=(JSONObject)value;if(!result.optBoolean(DEVICE_REGISTERED)){status.setText("Open the confirmation email, then sign in.");return;}
             synchronized(this){vault.save(result);session=result;} lock();
         });
     }
+    protected JSONObject authenticateAccount(String email, String password, boolean signup) throws Exception {
+        return signup ? CloudAuth.signup(email, password) : CloudAuth.login(email, password);
+    }
+
+    protected void registerDevice(String accessToken) throws Exception {
+        DeviceRegistry.register(getApplicationContext(), accessToken);
+    }
+
     private synchronized String token() throws Exception {
         if(session==null)throw new Exception("Sign in required");
         if(session.optLong("expires_at")<System.currentTimeMillis()/1000+90){
             JSONObject fresh=CloudAuth.request("/auth/v1/token?grant_type=refresh_token",args("refresh_token",session.getString("refresh_token")));
+            fresh.put(DEVICE_REGISTERED, session.getBoolean(DEVICE_REGISTERED));
             vault.save(fresh);session=fresh;
         }
         return session.getString("access_token");

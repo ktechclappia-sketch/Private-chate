@@ -24,6 +24,14 @@ public class SmokeRunner extends Instrumentation {
         static volatile boolean active, enabled, tester, admin;
         static volatile String message;
         static volatile Intent upi;
+        @Override protected JSONObject authenticateAccount(String email, String password, boolean signup)
+                throws Exception {
+            return new JSONObject().put("access_token", "fixture-access")
+                .put("refresh_token", "fixture-refresh");
+        }
+        @Override protected void registerDevice(String accessToken) throws Exception {
+            throw new java.io.IOException("Registration unavailable");
+        }
         @Override protected Object rpc(String op,JSONObject args) throws Exception {
             switch(op) {
                 case "access": return new JSONObject().put("enabled",enabled).put("active",active)
@@ -99,9 +107,14 @@ public class SmokeRunner extends Instrumentation {
             SessionVault vault=new SessionVault(app);vault.clear();
             Activity login=launch();waitFor(login,"Sign in",30000);
             check((login.getWindow().getAttributes().flags&WindowManager.LayoutParams.FLAG_SECURE)!=0,"Screen capture protection");
+            fill(login,"Email","fixture@example.invalid");
+            fill(login,"Account password","fixture-password");
+            click(login,"Sign in");
+            waitFor(login,"Device registration failed. Check your connection and sign in again.",30000);
+            check(vault.load()==null && !visible(login,"Unlock"),"Registration failure blocks session");
             runOnMainSync(login::finish);waitForIdleSync();
             SecretStore secrets=new SecretStore(app,id);secrets.configure("owner-test-a".toCharArray(),"empty-test-b".toCharArray());
-            vault.save(new JSONObject().put("user",new JSONObject().put("id",id)).put("refresh_token","fixture-token"));
+            vault.save(new JSONObject().put("user",new JSONObject().put("id",id)).put("refresh_token","fixture-token").put(MainActivity.DEVICE_REGISTERED,true));
             check(new SessionVault(app).load().getString("refresh_token").equals("fixture-token"),"Keystore restore");
             check(!app.getSharedPreferences("session_v1",0).getAll().toString().contains("fixture-token"),"Ciphertext persistence");
 
