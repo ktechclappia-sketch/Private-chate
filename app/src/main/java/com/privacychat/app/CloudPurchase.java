@@ -59,13 +59,7 @@ final class CloudPurchase {
    c.setFixedLengthStreamingMode(jpeg.length);
    try(java.io.OutputStream o=c.getOutputStream()){o.write(jpeg);}
    int code=c.getResponseCode();
- if(code==409 && path.equals("/rest/v1/rpc/privacy_chat_action")){
-  try(InputStream in=c.getErrorStream()){
-   if(in!=null && "PT409".equals(new JSONObject(readError(in)).optString("code")))
-    throw new InactiveDeviceException();
-  } catch(org.json.JSONException ignored){ /* Other HTTP conflicts use the default error. */ }
- }
- if(code<200||code>=300)throw new java.io.IOException("Screenshot upload failed: "+code);
+   if(code<200||code>=300)throw new java.io.IOException("Screenshot upload failed: "+code);
    return path;
   }finally{c.disconnect();}
  }
