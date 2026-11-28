@@ -35,10 +35,10 @@ android {
  buildTypes {
   getByName('debug') {
    applicationIdSuffix '.test'
-   manifestPlaceholders = [appLabel: 'Privacy Chat Test']
+   manifestPlaceholders = [appLabel: 'private chate']
   }
   getByName('release') {
-   manifestPlaceholders = [appLabel: 'Privacy Chat']
+   manifestPlaceholders = [appLabel: 'private chate']
    if (hasReleaseSigning) signingConfig signingConfigs.getByName('release')
   }
  }
