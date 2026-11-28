@@ -87,7 +87,9 @@ public class MainActivity extends Activity {
             try{done.accept(out);}catch(Exception e){error(e);}
         });}catch(Exception e){runOnUiThread(()->{if(screen==version&&foreground){busy=false;error(e);}});}});
     }
-    private void error(Exception e){status.setText(e.getMessage()==null?"Request failed. Try again.":e.getMessage());}
+    private void error(Exception e){
+        if(e instanceof CloudPurchase.InactiveDeviceException)logout();
+        status.setText(e.getMessage()==null?"Request failed. Try again.":e.getMessage());}
     private static JSONObject args(Object... pairs)throws JSONException{JSONObject o=new JSONObject();for(int i=0;i<pairs.length;i+=2)o.put((String)pairs[i],pairs[i+1]);return o;}
     private String uid(){return session.optJSONObject("user").optString("id");}
     private void login(){
@@ -188,7 +190,8 @@ public class MainActivity extends Activity {
                 });
             }catch(Exception e){runOnUiThread(()->{
                 if(generation==unlockGeneration && owner && foreground && !isDestroyed()){
-                    lock();status.setText("Connection interrupted. Unlock to check access again.");
+                    if(e instanceof CloudPurchase.InactiveDeviceException)error(e);
+                    else {lock();status.setText("Connection interrupted. Unlock to check access again.");}
                 }
             });}
         });

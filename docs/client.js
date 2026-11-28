@@ -131,9 +131,6 @@ async function login(e){
     session.expires_at=session.expires_at||Math.floor(Date.now()/1000)+Number(session.expires_in||3600);
     if(!session.user?.id||!session.access_token)throw new Error('Sign-in response was incomplete.');
     generation++;const expected=generation;
-    const result=await request('/rest/v1/rpc/privacy_chat_action','POST',{op:'access',args:{}},session.access_token);
-    if(!result)throw new Error('Account access could not be loaded.');
-    access=result;
     await registerDevice(expected);
     await load(expected);
     $('login').hidden=true;$('app').hidden=false;
