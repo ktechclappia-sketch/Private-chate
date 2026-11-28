@@ -97,7 +97,19 @@ public class MainActivity extends Activity {
         button("Sign in",()->authenticate(email,password,false));button("Create account",()->authenticate(email,password,true));
     }
     private void authenticate(EditText email,EditText password,boolean signup){
-        String address=email.getText().toString().trim(),pass=password.getText().toString();password.setText("");
+        String address = email.getText().toString().trim();
+        String pass = password.getText().toString();
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(address).matches()) {
+            status.setText("Enter a valid email address.");
+            email.requestFocus();
+            return;
+        }
+        if (pass.isEmpty()) {
+            status.setText("Enter your account password.");
+            password.requestFocus();
+            return;
+        }
+        password.setText("");
         task(()->{
             JSONObject result = authenticateAccount(address, pass, signup);
             if (!result.optString("refresh_token").isEmpty()) {
